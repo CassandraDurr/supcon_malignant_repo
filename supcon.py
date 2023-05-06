@@ -28,7 +28,7 @@ train_df = pd.read_csv("Training_data_ready_with_target_and_ID.csv")
 train_df.drop(columns="Unnamed: 0", inplace=True)
 
 # Get list of images in training dataset
-trainDataDir = "D:/Downloads/siim-isic-melanoma-classification/jpeg_adj_sample/train/"
+trainDataDir = "D:/Downloads/siim-isic-melanoma-classification/jpeg_adj_final/train/"
 image_generator = tf.keras.preprocessing.image.ImageDataGenerator().flow_from_directory(
     trainDataDir,
     shuffle=False,
@@ -59,7 +59,12 @@ else:
 # Set up the train/ validation split
 (train_tabular, valid_tabular, train_images, valid_images) = train_test_split(
     train_df, images, test_size=0.2, random_state=42
-)
+) # 33,126 images initially
+print(f"Training tabular data size = {train_tabular.shape}")
+print(f"Validation tabular data size = {valid_tabular.shape}")
+print(f"Training image data size = {train_images.shape}") 
+print(f"Validation image data size = {valid_images.shape}")
+
 # Set aside the target
 train_target = train_tabular["target"]
 valid_target = valid_tabular["target"]
@@ -75,7 +80,7 @@ valid_tabular.drop(columns=["target"], inplace=True)
 numClasses = 2
 input_shape = (224, 224, 3)
 learningRate = 0.001
-batchSize = 16
+batchSize = 256
 hiddenUnits = 512
 projectionUnits = 128
 numEpochs = 100
