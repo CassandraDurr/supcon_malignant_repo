@@ -4,6 +4,7 @@ import tensorflow_addons as tfa
 import plotly.graph_objects as go
 import numpy as np
 import pandas as pd
+import matplotlib.pyplot as plt
 
 print("Num GPUs Available: ", len(tf.config.list_physical_devices('GPU')))
 
@@ -30,11 +31,11 @@ def create_encoder(
     # Build encoder module
     if encoder_type == "ResNet50V2":
         encoder_module = tf.keras.applications.ResNet50V2(
-            include_top=False, weights=None, input_shape=input_shape, pooling="avg"
+            include_top=False, weights=None, input_shape=input_shape
         )
     elif encoder_type == "InceptionV3":
         encoder_module = tf.keras.applications.InceptionV3(
-            include_top=False, weights=None, input_shape=input_shape, pooling="avg"
+            include_top=False, weights=None, input_shape=input_shape
         )
     else:
         raise NotImplementedError(
@@ -369,3 +370,50 @@ def save_figure(
         height=img_height,
     )
     fig.write_image(f"images/{img_name}.png")
+      
+# Add Gaussian noise to images
+def add_noise(imgs: np.ndarray) -> np.ndarray:
+    """Add Gaussian noise with a standard deviation of 0.1 to a set of images.
+
+    Args:
+        imgs (np.ndarray): Images to add noise to.
+
+    Returns:
+        np.ndarray: Noisy images
+    """
+    # Restrict images to [0, 1] as before
+    noisy_imgs = np.clip(
+        imgs + np.random.normal(scale=0.1, size=imgs.shape), 0.0, 1.0
+    )
+
+    return noisy_imgs
+
+def lr_scheduler(epoch):
+    """Learning rate scheduler with a ramp up period.
+    
+    Source: https://wandb.ai/wandb_fc/tips/reports/How-to-Use-a-Learning-Rate-Scheduler-in-Keras--VmlldzoyMjU2MTI3
+
+    Args:
+        epoch (int): Epoch number.
+
+    Returns:
+        float: learning rate.
+    """
+    lr_start = 0.0005 # Initial learning rate
+    lr_max = 0.0006 # Maximum learning rate during training
+    lr_min = 5e-7 # Minimum learning rate
+    lr_ramp_ep = 3 # The number of epochs for the learning rate to ramp up from lr_start to lr_max
+    lr_sus_ep = 0 # The number of epochs during which the learning rate stays constant at
+                # lr_max after the ramp-up phase.
+    lr_decay = 0.4 # The decay factor applied to the learning rate after the ramp-up and suspension phases.
+    
+    if epoch < lr_ramp_ep:
+        lr = (lr_max - lr_start) / lr_ramp_ep * epoch + lr_start
+            
+    elif epoch < lr_ramp_ep + lr_sus_ep:
+        lr = lr_max
+            
+    else:
+        lr = (lr_max - lr_min) * lr_decay**(epoch - lr_ramp_ep - lr_sus_ep) + lr_min
+            
+    return lr

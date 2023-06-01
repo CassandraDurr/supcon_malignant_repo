@@ -16,12 +16,7 @@ from functions import (
     create_classifier,
 )
 
-# Choose weights - 0=random, 1=imagenet
-image_net = 0
-if image_net == 0:
-    folder_path = "Random"
-else:
-    folder_path = "ImageNet"
+# Weights should be loaded from pretext task.
 
 # Full training data
 train_df = pd.read_csv("Training_data_ready_with_target_and_ID.csv")
@@ -127,7 +122,7 @@ for enc in encoder_types:
     # Define all the callbacks
     # Logging
     callback_CSVLogger = tf.keras.callbacks.CSVLogger(
-        f"CSVLogger/{folder_path}/train_baseline_{enc}.csv"
+        f"CSVLogger/train_baseline_{enc}.csv"
     )
     # Training
     history = classifier.fit(
@@ -139,7 +134,7 @@ for enc in encoder_types:
         callbacks=[callback_EarlyStopping, callback_CSVLogger],
     )
     # Save the entire model as a SavedModel.
-    classifier.save(f"saved_models/{folder_path}/train_baseline_{enc}")
+    classifier.save(f"saved_models/train_baseline_{enc}")
 
 
 # -----------------------------------------------------------------------------------
@@ -170,7 +165,7 @@ for enc in encoder_types:
     encoder_with_projection_head.summary()
     # Logging
     callback_CSVLogger = tf.keras.callbacks.CSVLogger(
-        f"CSVLogger/{folder_path}/supcon_pretrained_encoder_{enc}.csv"
+        f"CSVLogger/supcon_pretrained_encoder_{enc}.csv"
     )
     # Pre-training encoder
     history = encoder_with_projection_head.fit(
@@ -194,7 +189,7 @@ for enc in encoder_types:
     classifier.summary()
     # Logging
     callback_CSVLogger = tf.keras.callbacks.CSVLogger(
-        f"CSVLogger/{folder_path}/supcon_encoder_{enc}.csv"
+        f"CSVLogger/supcon_encoder_{enc}.csv"
     )
     # Train the classifier with the frozen encoder
     history = classifier.fit(
@@ -206,7 +201,7 @@ for enc in encoder_types:
         callbacks=[callback_EarlyStopping, callback_CSVLogger],
     )
     # Save the entire model as a SavedModel.
-    classifier.save(f"saved_models/{folder_path}/supcon_encoder_{enc}")
+    classifier.save(f"saved_models/supcon_encoder_{enc}")
 
 
 # ---------------------------------------------------------------------------------
@@ -237,7 +232,7 @@ for enc in encoder_types:
     # Define all the callbacks
     # Logging
     callback_CSVLogger = tf.keras.callbacks.CSVLogger(
-        f"CSVLogger/{folder_path}/train_baseline_{enc}_incl_tabular.csv"
+        f"CSVLogger/train_baseline_{enc}_incl_tabular.csv"
     )
     # Training
     history = classifier.fit(
@@ -252,7 +247,7 @@ for enc in encoder_types:
         callbacks=[callback_EarlyStopping, callback_CSVLogger],
     )
     # Save the entire model as a SavedModel.
-    classifier.save(f"saved_models/{folder_path}/train_baseline_{enc}_incl_tabular")
+    classifier.save(f"saved_models/train_baseline_{enc}_incl_tabular")
 
 
 # -----------------------------------------------------------------------------------
@@ -281,7 +276,7 @@ for enc in encoder_types:
     encoder_with_projection_head.summary()
     # Logging
     callback_CSVLogger = tf.keras.callbacks.CSVLogger(
-        f"CSVLogger/{folder_path}/supcon_pretrained_encoder_{enc}_incl_tabular.csv"
+        f"CSVLogger/supcon_pretrained_encoder_{enc}_incl_tabular.csv"
     )
     # Pre-training encoder
     history = encoder_with_projection_head.fit(
@@ -305,7 +300,7 @@ for enc in encoder_types:
     classifier.summary()
     # Logging
     callback_CSVLogger = tf.keras.callbacks.CSVLogger(
-        f"CSVLogger/{folder_path}/supcon_encoder_{enc}_incl_tabular.csv"
+        f"CSVLogger/supcon_encoder_{enc}_incl_tabular.csv"
     )
     # Train the classifier with the frozen encoder
     history = classifier.fit(
@@ -320,7 +315,7 @@ for enc in encoder_types:
         callbacks=[callback_EarlyStopping, callback_CSVLogger],
     )
     # Save the entire model as a SavedModel.
-    classifier.save(f"saved_models/{folder_path}/supcon_encoder_{enc}_incl_tabular")
+    classifier.save(f"saved_models/supcon_encoder_{enc}_incl_tabular")
 
 # -----------------------------------------------------------------------------------
 # Adding metrics
@@ -328,36 +323,36 @@ for enc in encoder_types:
 
 # Add metrics to csv file
 add_metrics(
-    hist_filelocation=f"CSVLogger/{folder_path}/train_baseline_InceptionV3_incl_tabular.csv",
-    saved_name=f"CSVLogger/{folder_path}/train_baseline_InceptionV3_incl_tabular_added_metrics.csv",
+    hist_filelocation=f"CSVLogger/train_baseline_InceptionV3_incl_tabular.csv",
+    saved_name=f"CSVLogger/train_baseline_InceptionV3_incl_tabular_added_metrics.csv",
 )
 add_metrics(
-    hist_filelocation=f"CSVLogger/{folder_path}/train_baseline_ResNet50V2_incl_tabular.csv",
-    saved_name=f"CSVLogger/{folder_path}/train_baseline_ResNet50V2_incl_tabular_added_metrics.csv",
+    hist_filelocation=f"CSVLogger/train_baseline_ResNet50V2_incl_tabular.csv",
+    saved_name=f"CSVLogger/train_baseline_ResNet50V2_incl_tabular_added_metrics.csv",
 )
 add_metrics(
-    hist_filelocation=f"CSVLogger/{folder_path}/supcon_encoder_InceptionV3_incl_tabular.csv",
-    saved_name=f"CSVLogger/{folder_path}/supcon_encoder_InceptionV3_incl_tabular_added_metrics.csv",
+    hist_filelocation=f"CSVLogger/supcon_encoder_InceptionV3_incl_tabular.csv",
+    saved_name=f"CSVLogger/supcon_encoder_InceptionV3_incl_tabular_added_metrics.csv",
 )
 add_metrics(
-    hist_filelocation=f"CSVLogger/{folder_path}/supcon_encoder_ResNet50V2_incl_tabular.csv",
-    saved_name=f"CSVLogger/{folder_path}/supcon_encoder_ResNet50V2_incl_tabular_added_metrics.csv",
+    hist_filelocation=f"CSVLogger/supcon_encoder_ResNet50V2_incl_tabular.csv",
+    saved_name=f"CSVLogger/supcon_encoder_ResNet50V2_incl_tabular_added_metrics.csv",
 )
 add_metrics(
-    hist_filelocation=f"CSVLogger/{folder_path}/supcon_encoder_InceptionV3.csv",
-    saved_name=f"CSVLogger/{folder_path}/supcon_encoder_InceptionV3_added_metrics.csv",
+    hist_filelocation=f"CSVLogger/supcon_encoder_InceptionV3.csv",
+    saved_name=f"CSVLogger/supcon_encoder_InceptionV3_added_metrics.csv",
 )
 add_metrics(
-    hist_filelocation=f"CSVLogger/{folder_path}/supcon_encoder_ResNet50V2.csv",
-    saved_name=f"CSVLogger/{folder_path}/supcon_encoder_ResNet50V2_added_metrics.csv",
+    hist_filelocation=f"CSVLogger/supcon_encoder_ResNet50V2.csv",
+    saved_name=f"CSVLogger/supcon_encoder_ResNet50V2_added_metrics.csv",
 )
 add_metrics(
-    hist_filelocation=f"CSVLogger/{folder_path}/supcon_encoder_InceptionV3.csv",
-    saved_name=f"CSVLogger/{folder_path}/supcon_encoder_InceptionV3_added_metrics.csv",
+    hist_filelocation=f"CSVLogger/supcon_encoder_InceptionV3.csv",
+    saved_name=f"CSVLogger/supcon_encoder_InceptionV3_added_metrics.csv",
 )
 add_metrics(
-    hist_filelocation=f"CSVLogger/{folder_path}/train_baseline_InceptionV3.csv",
-    saved_name=f"CSVLogger/{folder_path}/train_baseline_InceptionV3_added_metrics.csv",
+    hist_filelocation=f"CSVLogger/train_baseline_InceptionV3.csv",
+    saved_name=f"CSVLogger/train_baseline_InceptionV3_added_metrics.csv",
 )
 
 # -----------------------------------------------------------------------------------
