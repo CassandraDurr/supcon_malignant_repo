@@ -4,9 +4,9 @@ import tensorflow_addons as tfa
 import plotly.graph_objects as go
 import numpy as np
 import pandas as pd
-import matplotlib.pyplot as plt
 
-print("Num GPUs Available: ", len(tf.config.list_physical_devices('GPU')))
+print("Num GPUs Available: ", len(tf.config.list_physical_devices("GPU")))
+
 
 # Create encoder function
 def create_encoder(
@@ -14,6 +14,7 @@ def create_encoder(
     input_shape: tuple,
     data_augmentation: tf.keras.Sequential,
     encoder_name: str,
+    encoder_weights_location: str,
 ) -> tf.keras.Model:
     """This function creates a TensorFlow encoder model without trained weights.
 
@@ -24,6 +25,7 @@ def create_encoder(
         input_shape (tuple): Shape of the image data (width, height, channels).
         data_augmentation (tf.keras.Sequential): A tensorflow sequential model performing data augmentation.
         encoder_name (str): The name of the encoder model to be returned.
+        encoder_weights_location (str): String location of the encoder weights.
 
     Returns:
         tf.keras.Model: A TensorFlow encoder model.
@@ -33,10 +35,12 @@ def create_encoder(
         encoder_module = tf.keras.applications.ResNet50V2(
             include_top=False, weights=None, input_shape=input_shape
         )
+        encoder_module.load_weights(encoder_weights_location)
     elif encoder_type == "InceptionV3":
         encoder_module = tf.keras.applications.InceptionV3(
             include_top=False, weights=None, input_shape=input_shape
         )
+        encoder_module.load_weights(encoder_weights_location)
     else:
         raise NotImplementedError(
             "This function only produces ResNet50V2 or InceptionV3 encoders."
@@ -45,6 +49,7 @@ def create_encoder(
     input_module = tf.keras.Input(shape=input_shape)
     augmentation_module = data_augmentation(input_module)
     output_module = encoder_module(augmentation_module)
+    output_module = tf.keras.layers.GlobalAveragePooling2D()(output_module)
     model = tf.keras.Model(
         inputs=input_module, outputs=output_module, name=encoder_name
     )
@@ -66,7 +71,7 @@ def create_data_augmentation_module(
     data_augmentation = tf.keras.Sequential(
         [
             tf.keras.layers.Normalization(),
-            tf.keras.layers.GaussianNoise(stddev = 0.1),
+            tf.keras.layers.GaussianNoise(stddev=0.1),
             tf.keras.layers.RandomFlip("horizontal"),
             tf.keras.layers.RandomFlip("vertical"),
             tf.keras.layers.RandomRotation(RandomRotationAmount)
@@ -179,7 +184,6 @@ def create_classifier_imgs_only(
     return model
 
 
-
 # Create a classifier for the images only models
 def create_classifier(
     encoder_module: tf.keras.Model,
@@ -231,7 +235,11 @@ def create_classifier(
     # Output
     output_module = tf.keras.layers.Dense(1, activation="sigmoid")(concat_dense)
     # Build module
-    model = tf.keras.Model(inputs=[input_module, model_input_tabular], outputs=output_module, name=model_name)
+    model = tf.keras.Model(
+        inputs=[input_module, model_input_tabular],
+        outputs=output_module,
+        name=model_name,
+    )
     # Metrics for binary classification
     metrics = [
         "accuracy",
@@ -262,8 +270,10 @@ def add_metrics(hist_filelocation: str, saved_name: str) -> None:
     """
     # Load data from csv and create pandas df
     training_history = pd.read_csv(hist_filelocation, sep=",")
-    # Remove any "_" + number(s) at the end of the column names 
-    training_history.columns = [re.sub("_\d+", "", col) for col in training_history.columns]  
+    # Remove any "_" + number(s) at the end of the column names
+    training_history.columns = [
+        re.sub("_\d+", "", col) for col in training_history.columns
+    ]
     # f1_score
     train_f1 = 2 * np.dot(
         np.array(training_history["precision"]), np.array(training_history["recall"])
@@ -370,7 +380,8 @@ def save_figure(
         height=img_height,
     )
     fig.write_image(f"images/{img_name}.png")
-      
+
+
 # Add Gaussian noise to images
 def add_noise(imgs: np.ndarray) -> np.ndarray:
     """Add Gaussian noise with a standard deviation of 0.1 to a set of images.
@@ -382,15 +393,14 @@ def add_noise(imgs: np.ndarray) -> np.ndarray:
         np.ndarray: Noisy images
     """
     # Restrict images to [0, 1] as before
-    noisy_imgs = np.clip(
-        imgs + np.random.normal(scale=0.1, size=imgs.shape), 0.0, 1.0
-    )
+    noisy_imgs = np.clip(imgs + np.random.normal(scale=0.1, size=imgs.shape), 0.0, 1.0)
 
     return noisy_imgs
 
+
 def lr_scheduler(epoch):
     """Learning rate scheduler with a ramp up period.
-    
+
     Source: https://wandb.ai/wandb_fc/tips/reports/How-to-Use-a-Learning-Rate-Scheduler-in-Keras--VmlldzoyMjU2MTI3
 
     Args:
@@ -399,21 +409,23 @@ def lr_scheduler(epoch):
     Returns:
         float: learning rate.
     """
-    lr_start = 0.0005 # Initial learning rate
-    lr_max = 0.0006 # Maximum learning rate during training
-    lr_min = 5e-7 # Minimum learning rate
-    lr_ramp_ep = 3 # The number of epochs for the learning rate to ramp up from lr_start to lr_max
-    lr_sus_ep = 0 # The number of epochs during which the learning rate stays constant at
-                # lr_max after the ramp-up phase.
-    lr_decay = 0.4 # The decay factor applied to the learning rate after the ramp-up and suspension phases.
-    
+    lr_start = 0.0005  # Initial learning rate
+    lr_max = 0.0006  # Maximum learning rate during training
+    lr_min = 5e-7  # Minimum learning rate
+    lr_ramp_ep = 3  # The number of epochs for the learning rate to ramp up from lr_start to lr_max
+    lr_sus_ep = (
+        0  # The number of epochs during which the learning rate stays constant at
+    )
+    # lr_max after the ramp-up phase.
+    lr_decay = 0.4  # The decay factor applied to the learning rate after the ramp-up and suspension phases.
+
     if epoch < lr_ramp_ep:
         lr = (lr_max - lr_start) / lr_ramp_ep * epoch + lr_start
-            
+
     elif epoch < lr_ramp_ep + lr_sus_ep:
         lr = lr_max
-            
+
     else:
-        lr = (lr_max - lr_min) * lr_decay**(epoch - lr_ramp_ep - lr_sus_ep) + lr_min
-            
+        lr = (lr_max - lr_min) * lr_decay ** (epoch - lr_ramp_ep - lr_sus_ep) + lr_min
+
     return lr

@@ -12,7 +12,7 @@ input_shape = (224, 224, 3)
 batch_size = 10  # 32
 lr_start = 0.0005
 
-encoder_type = "InceptionV3" # "ResNet50V2"
+encoder_type = "ResNet50V2" # "InceptionV3" # "ResNet50V2"
 input_layer = tf.keras.layers.Input(shape=input_shape)
 if encoder_type == "ResNet50V2":
     print(f"\n{encoder_type}\n")
@@ -158,7 +158,8 @@ history = autoencoder_model.fit(
 )
 
 # Try to save the weights from the encoder
-encoder_model.save_weights(f"saved_models/encoder_weights_{encoder_type}_MSE.h5")
+encoder_module.save_weights(f"saved_models/encoder_weights_{encoder_type}_MSE.h5")
+# encoder_model.save_weights(f"saved_models/encoder_weights_{encoder_type}_MSE.h5")
 # encoder_model.load_weights('encoder_weights.h5')
 
 # Plots
