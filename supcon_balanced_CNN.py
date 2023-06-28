@@ -1,16 +1,15 @@
 """Supervised contrastive learning using two CNN encoder types image data, with balanced batching."""
-import sys
-
-import numpy as np
-import pandas as pd
 import tensorflow as tf
-from sklearn.model_selection import train_test_split
 from kerasgen.balanced_image_dataset import balanced_image_dataset_from_directory
 
-from functions import (SupervisedContrastiveLoss, add_metrics,
-                       add_projection_head, create_classifier,
-                       create_classifier_imgs_only,
-                       create_data_augmentation_module, create_encoder)
+from functions import (
+    SupervisedContrastiveLoss,
+    add_metrics,
+    add_projection_head,
+    create_classifier_imgs_only,
+    create_data_augmentation_module,
+    create_encoder,
+)
 
 # Weights should be loaded from pretext task.
 

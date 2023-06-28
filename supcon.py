@@ -6,10 +6,15 @@ import pandas as pd
 import tensorflow as tf
 from sklearn.model_selection import train_test_split
 
-from functions import (SupervisedContrastiveLoss, add_metrics,
-                       add_projection_head, create_classifier,
-                       create_classifier_imgs_only,
-                       create_data_augmentation_module, create_encoder)
+from functions import (
+    SupervisedContrastiveLoss,
+    add_metrics,
+    add_projection_head,
+    create_classifier,
+    create_classifier_imgs_only,
+    create_data_augmentation_module,
+    create_encoder,
+)
 
 # Weights should be loaded from pretext task.
 
@@ -25,7 +30,7 @@ image_generator = tf.keras.preprocessing.image.ImageDataGenerator().flow_from_di
     shuffle=False,
     class_mode="binary",
     target_size=(224, 224),
-    batch_size=400 #33126 #400,
+    batch_size=400,  # 33126 #400,
 )  # total amount of 0 and 1 values
 images, labels = next(image_generator)
 
