@@ -66,8 +66,6 @@ callback_EarlyStopping = tf.keras.callbacks.EarlyStopping(
 
 # Image augmentation
 data_aug = create_data_augmentation_module()
-# # Setting the state of the normalization layer.
-# data_aug.layers[0].adapt(train_ds)
 
 # ---------------------------------------------------------------------------------
 # Baseline classification models using images only
