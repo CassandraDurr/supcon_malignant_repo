@@ -1,4 +1,4 @@
-"""Supervised contrastive learning using two encoder types and either tabular and image data or just image data."""
+"""Supervised contrastive learning using two CNN encoder types and either tabular and image data or just image data. No balanced batching."""
 import sys
 
 import numpy as np
@@ -25,7 +25,7 @@ image_generator = tf.keras.preprocessing.image.ImageDataGenerator().flow_from_di
     shuffle=False,
     class_mode="binary",
     target_size=(224, 224),
-    batch_size=400,
+    batch_size=400 #33126 #400,
 )  # total amount of 0 and 1 values
 images, labels = next(image_generator)
 
@@ -75,7 +75,7 @@ valid_tabular.drop(columns=["target"], inplace=True)
 numClasses = 2
 input_shape = (224, 224, 3)
 learningRate = 0.001
-batchSize = 6  # 256
+batchSize = 8  # 256
 hiddenUnits = 512
 projectionUnits = 128
 numEpochs = 100
@@ -94,10 +94,10 @@ data_aug = create_data_augmentation_module()
 # Setting the state of the normalization layer.
 data_aug.layers[0].adapt(train_images)
 
+encoder_types = ["ResNet50V2", "InceptionV3"]
 # ---------------------------------------------------------------------------------
 # Baseline classification models using images only
 # ---------------------------------------------------------------------------------
-encoder_types = ["ResNet50V2", "InceptionV3"]
 for enc in encoder_types:
     print(f"\nBaseline classification model using {enc}, only images\n")
     # Setup encoder
