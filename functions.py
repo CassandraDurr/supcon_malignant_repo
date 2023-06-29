@@ -1,109 +1,115 @@
 import re
-import tensorflow as tf
-import tensorflow_addons as tfa
-import plotly.graph_objects as go
+
 import numpy as np
 import pandas as pd
+import plotly.graph_objects as go
+import tensorflow as tf
+import tensorflow_addons as tfa
 
 print("Num GPUs Available: ", len(tf.config.list_physical_devices("GPU")))
 
+
 # ViT functions
 class SoftAttention(tf.keras.layers.Layer):
-    def __init__(self, ch, m, concat_with_x = False,
-                 aggregate = False,**kwargs):
+    def __init__(self, ch, m, concat_with_x=False, aggregate=False, **kwargs):
         self.channels = int(ch)
         self.multiheads = m
         self.aggregate_channels = aggregate
         self.concat_input_with_scaled = concat_with_x
 
-        
         super(SoftAttention, self).__init__(**kwargs)
 
     def build(self, input_shape):
-
         self.i_shape = input_shape
 
-        kernel_shape_conv3d = (self.channels, 3, 3) + (1, self.multiheads) # DHWC
-    
-        self.out_attention_maps_shape = input_shape[0:1] + (self.multiheads, ) + input_shape[1:-1]
-        
-        if self.aggregate_channels == False:
+        kernel_shape_conv3d = (self.channels, 3, 3) + (1, self.multiheads)  # DHWC
 
-            self.out_features_shape = input_shape[:-1] + (input_shape[-1] + (input_shape[-1]*self.multiheads), )
+        self.out_attention_maps_shape = (
+            input_shape[0:1] + (self.multiheads,) + input_shape[1:-1]
+        )
+
+        if self.aggregate_channels == False:
+            self.out_features_shape = input_shape[:-1] + (
+                input_shape[-1] + (input_shape[-1] * self.multiheads),
+            )
         else:
             if self.concat_input_with_scaled:
-                self.out_features_shape = input_shape[:-1] + (input_shape[-1]*2, )
+                self.out_features_shape = input_shape[:-1] + (input_shape[-1] * 2,)
             else:
                 self.out_features_shape = input_shape
-        
 
-        self.kernel_conv3d = self.add_weight(shape = kernel_shape_conv3d,
-                                             initializer = 'he_uniform',
-                                             name = 'kernel_conv3d')
-        self.bias_conv3d = self.add_weight(shape = (self.multiheads, ),
-                                           initializer = 'zeros',
-                                           name = 'bias_conv3d')
+        self.kernel_conv3d = self.add_weight(
+            shape=kernel_shape_conv3d, initializer="he_uniform", name="kernel_conv3d"
+        )
+        self.bias_conv3d = self.add_weight(
+            shape=(self.multiheads,), initializer="zeros", name="bias_conv3d"
+        )
 
         super(SoftAttention, self).build(input_shape)
 
     def call(self, x):
+        exp_x = tf.keras.backend.expand_dims(x, axis=-1)
 
-        exp_x = tf.keras.backend.expand_dims(x, axis = -1)
-
-        c3d = tf.keras.backend.conv3d(exp_x,
-                                      kernel = self.kernel_conv3d,
-                                      strides = (1, 1, self.i_shape[-1]), 
-                                      padding = 'same', 
-                                      data_format = 'channels_last')
+        c3d = tf.keras.backend.conv3d(
+            exp_x,
+            kernel=self.kernel_conv3d,
+            strides=(1, 1, self.i_shape[-1]),
+            padding="same",
+            data_format="channels_last",
+        )
         conv3d = tf.keras.backend.bias_add(c3d, self.bias_conv3d)
-        conv3d = tf.keras.layers.Activation('relu')(conv3d)
+        conv3d = tf.keras.layers.Activation("relu")(conv3d)
         conv3d = tf.keras.backend.permute_dimensions(conv3d, pattern=(0, 4, 1, 2, 3))
-        conv3d = tf.keras.backend.squeeze(conv3d, axis = -1)
-        conv3d = tf.keras.backend.reshape(conv3d,
-                                          shape=(-1, self.multiheads, self.i_shape[1]*self.i_shape[2]))
+        conv3d = tf.keras.backend.squeeze(conv3d, axis=-1)
+        conv3d = tf.keras.backend.reshape(
+            conv3d, shape=(-1, self.multiheads, self.i_shape[1] * self.i_shape[2])
+        )
 
-        softmax_alpha = tf.keras.backend.softmax(conv3d, axis = -1) 
-        softmax_alpha = tf.keras.layers.Reshape(target_shape = (self.multiheads,
-                                                                self.i_shape[1],
-                                                                self.i_shape[2]))(softmax_alpha)
+        softmax_alpha = tf.keras.backend.softmax(conv3d, axis=-1)
+        softmax_alpha = tf.keras.layers.Reshape(
+            target_shape=(self.multiheads, self.i_shape[1], self.i_shape[2])
+        )(softmax_alpha)
 
-        
         if self.aggregate_channels == False:
-            exp_softmax_alpha = tf.keras.backend.expand_dims(softmax_alpha, axis = -1)       
-            exp_softmax_alpha = tf.keras.backend.permute_dimensions(exp_softmax_alpha,
-                                                                    pattern=(0, 2, 3, 1, 4))
-   
-            x_exp = tf.keras.backend.expand_dims(x, axis = -2)
-   
-            u = tf.keras.layers.Multiply()([exp_softmax_alpha, x_exp])   
-            u = tf.keras.layers.Reshape(target_shape = (self.i_shape[1],
-                                                        self.i_shape[2],
-                                                        u.shape[-1]*u.shape[-2]))(u)
+            exp_softmax_alpha = tf.keras.backend.expand_dims(softmax_alpha, axis=-1)
+            exp_softmax_alpha = tf.keras.backend.permute_dimensions(
+                exp_softmax_alpha, pattern=(0, 2, 3, 1, 4)
+            )
+
+            x_exp = tf.keras.backend.expand_dims(x, axis=-2)
+
+            u = tf.keras.layers.Multiply()([exp_softmax_alpha, x_exp])
+            u = tf.keras.layers.Reshape(
+                target_shape=(
+                    self.i_shape[1],
+                    self.i_shape[2],
+                    u.shape[-1] * u.shape[-2],
+                )
+            )(u)
 
         else:
-            exp_softmax_alpha = tf.keras.backend.permute_dimensions(softmax_alpha,
-                                                                    pattern=(0, 2, 3, 1))
-            exp_softmax_alpha = tf.keras.backend.sum(exp_softmax_alpha,
-                                                     axis = -1)
-            exp_softmax_alpha = tf.keras.backend.expand_dims(exp_softmax_alpha,
-                                                             axis=-1)
+            exp_softmax_alpha = tf.keras.backend.permute_dimensions(
+                softmax_alpha, pattern=(0, 2, 3, 1)
+            )
+            exp_softmax_alpha = tf.keras.backend.sum(exp_softmax_alpha, axis=-1)
+            exp_softmax_alpha = tf.keras.backend.expand_dims(exp_softmax_alpha, axis=-1)
 
-            u = tf.keras.layers.Multiply()([exp_softmax_alpha, x])   
+            u = tf.keras.layers.Multiply()([exp_softmax_alpha, x])
 
         if self.concat_input_with_scaled:
-            o = tf.keras.layers.Concatenate(axis=-1)([u,x])
+            o = tf.keras.layers.Concatenate(axis=-1)([u, x])
         else:
             o = u
-        
+
         return [o, softmax_alpha]
 
-    def compute_output_shape(self, input_shape): 
+    def compute_output_shape(self, input_shape):
         return [self.out_features_shape, self.out_attention_maps_shape]
 
-    
     def get_config(self):
-        return super(SoftAttention,self).get_config()
-    
+        return super(SoftAttention, self).get_config()
+
+
 # https://keras.io/examples/vision/image_classification_with_vision_transformer/
 class Patches(tf.keras.layers.Layer):
     def __init__(self, patch_size):
@@ -122,7 +128,8 @@ class Patches(tf.keras.layers.Layer):
         patch_dims = patches.shape[-1]
         patches = tf.reshape(patches, [batch_size, -1, patch_dims])
         return patches
-    
+
+
 class PatchEncoder(tf.keras.layers.Layer):
     def __init__(self, num_patches, projection_dim):
         super(PatchEncoder, self).__init__()
@@ -136,22 +143,73 @@ class PatchEncoder(tf.keras.layers.Layer):
         positions = tf.range(start=0, limit=self.num_patches, delta=1)
         encoded = self.projection(patch) + self.position_embedding(positions)
         return encoded
- 
+
+
 def mlp(x, hidden_units, dropout_rate):
     for units in hidden_units:
         x = tf.keras.layers.Dense(units, activation=tf.nn.gelu)(x)
         x = tf.keras.layers.Dropout(dropout_rate)(x)
     return x
 
+
 # ViT encoder
-def create_vit_encoder(data_augmentation: tf.keras.Sequential, patch_size:int, num_patches:int,
-                       projection_dim:int, transformer_layers:int, num_heads:int, transformer_units:list,
-                       mlp_head_units:int, input_shape:tuple, encoder_name:str, representation_units:int) -> tf.keras.Model:
+def create_vit_encoder(
+    data_augmentation: tf.keras.Sequential,
+    patch_size: int,
+    num_patches: int,
+    projection_dim: int,
+    transformer_layers: int,
+    num_heads: int,
+    transformer_units: list,
+    input_shape: tuple,
+    encoder_name: str,
+    representation_units: int,
+    load_weights: bool,
+    weight_location: str,
+) -> tf.keras.Model:
     # Create model with the chosen encoder
     input_module = tf.keras.Input(shape=input_shape)
     augmentation_module = data_augmentation(input_module)
+    # Create encoder
+    vit_encoder = create_vit_encoder_module(
+        patch_size=patch_size,
+        num_patches=num_patches,
+        projection_dim=projection_dim,
+        transformer_layers=transformer_layers,
+        num_heads=num_heads,
+        transformer_units=transformer_units,
+        input_shape=input_shape,
+        encoder_name="ViT_encoder_module",
+        representation_units=representation_units,
+    )
+    if load_weights:
+        vit_encoder.load_weights(weight_location)
+
+    output_module = vit_encoder(augmentation_module)
+
+    model = tf.keras.Model(
+        inputs=input_module, outputs=output_module, name=encoder_name
+    )
+
+    return model
+
+
+# Create ViT encoder module without augmentation
+def create_vit_encoder_module(
+    patch_size: int,
+    num_patches: int,
+    projection_dim: int,
+    transformer_layers: int,
+    num_heads: int,
+    transformer_units: list,
+    input_shape: tuple,
+    encoder_name: str,
+    representation_units: int,
+) -> tf.keras.Model:
+    # Create model with the chosen encoder
+    input_module = tf.keras.Input(shape=input_shape)
     # Create patches.
-    patches = Patches(patch_size)(augmentation_module)
+    patches = Patches(patch_size)(input_module)
     # Encode patches.
     encoded_patches = PatchEncoder(num_patches, projection_dim)(patches)
 
@@ -176,15 +234,64 @@ def create_vit_encoder(data_augmentation: tf.keras.Sequential, patch_size:int, n
     representation = tf.keras.layers.LayerNormalization(epsilon=1e-6)(encoded_patches)
     representation = tf.keras.layers.Flatten()(representation)
     representation = tf.keras.layers.Dropout(0.5)(representation)
-    
+
     # Add MLP.
-    output_module = tf.keras.layers.Dense(representation_units, activation=tf.nn.gelu)(representation)
+    output_module = tf.keras.layers.Dense(representation_units, activation=tf.nn.gelu)(
+        representation
+    )
 
     model = tf.keras.Model(
         inputs=input_module, outputs=output_module, name=encoder_name
     )
-    
+
     return model
+
+
+# Create ViT decoder
+def create_decoder():
+    # Start from encoded input shape
+    decoder_input = tf.keras.layers.Input(shape=(2048,))
+
+    # Reshape it to something spatial, assuming the encoder used convolutions
+    x = tf.keras.layers.Reshape((8, 8, 32))(decoder_input)
+
+    # Upsampling to the original size
+    # 8x8x32 -> 16x16x128
+    x = tf.keras.layers.UpSampling2D()(x)
+    x = tf.keras.layers.Conv2D(128, (3, 3), padding="same")(x)
+    x = tf.keras.layers.BatchNormalization()(x)
+    x = tf.keras.layers.LeakyReLU()(x)
+
+    # 16x16x128 -> 32x32x64
+    x = tf.keras.layers.UpSampling2D()(x)
+    x = tf.keras.layers.Conv2D(64, (3, 3), padding="same")(x)
+    x = tf.keras.layers.BatchNormalization()(x)
+    x = tf.keras.layers.LeakyReLU()(x)
+
+    # 32x32x64 -> 64x64x32
+    x = tf.keras.layers.UpSampling2D()(x)
+    x = tf.keras.layers.Conv2D(32, (3, 3), padding="same")(x)
+    x = tf.keras.layers.BatchNormalization()(x)
+    x = tf.keras.layers.LeakyReLU()(x)
+
+    # 64x64x32 -> 128x128x16
+    x = tf.keras.layers.UpSampling2D()(x)
+    x = tf.keras.layers.Conv2D(16, (3, 3), padding="same")(x)
+    x = tf.keras.layers.BatchNormalization()(x)
+    x = tf.keras.layers.LeakyReLU()(x)
+
+    # 128x128x16 -> 256x256x16
+    x = tf.keras.layers.UpSampling2D()(x)
+
+    # 256x256x16 -> 224x224x3
+    # Here we use a Conv2D with kernel size 33 to reduce the spatial dimensions
+    x = tf.keras.layers.Conv2D(3, (33, 33), activation="sigmoid", padding="valid")(x)
+
+    # Build the model
+    decoder = tf.keras.Model(decoder_input, x)
+
+    return decoder
+
 
 # Create encoder function
 def create_encoder(
@@ -232,6 +339,7 @@ def create_encoder(
         inputs=input_module, outputs=output_module, name=encoder_name
     )
     return model
+
 
 # Create data-augmentation module
 def create_data_augmentation_module(

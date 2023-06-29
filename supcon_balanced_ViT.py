@@ -1,13 +1,11 @@
 """Supervised contrastive learning using two CNN encoder types image data, with balanced batching."""
 import tensorflow as tf
 from kerasgen.balanced_image_dataset import balanced_image_dataset_from_directory
-from sklearn.model_selection import train_test_split
 
 from functions import (
     SupervisedContrastiveLoss,
     add_metrics,
     add_projection_head,
-    create_classifier,
     create_classifier_imgs_only,
     create_data_augmentation_module,
     create_vit_encoder,
@@ -49,13 +47,13 @@ val_ds = balanced_image_dataset_from_directory(
 # ------------------------------------------------------
 # Modelling
 # ------------------------------------------------------
-# --- Hyperparameter configuration --- 
+# --- Hyperparameter configuration ---
 input_shape = (image_width, image_width, 3)
 learning_rate = 0.001
 weight_decay = 0.0001
 batch_size = 32
 num_epochs = 100
-image_size = 224 
+image_size = 224
 # Size of the patches to be extract from the input images
 patch_size = 14
 num_patches = (image_size // patch_size) ** 2
@@ -65,15 +63,14 @@ num_heads = 4
 transformer_units = [
     projection_dim * 2,
     projection_dim,
-]  
+]
 transformer_layers = 8
 # Size of the dense layers of the final classifier
-mlp_head_units = [512, 256]  
 representation_units = 2048
 learningRate = 0.001
 optimiser = tf.keras.optimizers.Adam(learning_rate=learningRate)
 # Classifer
-hiddenUnits = 512 
+hiddenUnits = 512
 dropoutRate = 0.1
 numEpochs = 100
 projectionUnits = 128
@@ -95,16 +92,18 @@ print("\nBaseline ViT classification model.\n")
 # Setup encoder
 encoder = create_vit_encoder(
     data_augmentation=data_aug,
-    patch_size = patch_size,
-    num_patches = num_patches,
-    projection_dim = projection_dim,
-    transformer_layers = transformer_layers,
-    num_heads = num_heads,
-    transformer_units = transformer_units,
-    mlp_head_units = mlp_head_units,
-    input_shape = input_shape,
-    encoder_name = "ViT_encoder",
-    representation_units = representation_units)
+    patch_size=patch_size,
+    num_patches=num_patches,
+    projection_dim=projection_dim,
+    transformer_layers=transformer_layers,
+    num_heads=num_heads,
+    transformer_units=transformer_units,
+    input_shape=input_shape,
+    encoder_name="ViT_encoder",
+    representation_units=representation_units,
+    load_weights=True,
+    weight_location="saved_models/encoder_weights_ViT_MSE.h5",
+)
 encoder.summary()
 # Setup classifier
 classifier = create_classifier_imgs_only(
@@ -119,9 +118,7 @@ classifier = create_classifier_imgs_only(
 classifier.summary()
 # Define all the callbacks
 # Logging
-callback_CSVLogger = tf.keras.callbacks.CSVLogger(
-    "CSVLogger/train_baseline_ViT.csv"
-)
+callback_CSVLogger = tf.keras.callbacks.CSVLogger("CSVLogger/train_baseline_ViT.csv")
 # Training
 history = classifier.fit(
     train_ds,
@@ -136,23 +133,25 @@ classifier.save("saved_models/train_baseline_ViT")
 # -----------------------------------------------------------------------------------
 # Supervised contrastive learning model with images only
 # -----------------------------------------------------------------------------------
-print(
-       "\nSupervised contrastive learning classification model using ViT.\n"
-    )
+print("\nSupervised contrastive learning classification model using ViT.\n")
 # Pre-train the encoder
 encoder = create_vit_encoder(
     data_augmentation=data_aug,
-    patch_size = patch_size,
-    num_patches = num_patches,
-    projection_dim = projection_dim,
-    transformer_layers = transformer_layers,
-    num_heads = num_heads,
-    transformer_units = transformer_units,
-    mlp_head_units = mlp_head_units,
-    input_shape = input_shape,
-    encoder_name = "ViT_encoder_supcon",
-    representation_units = representation_units)
+    patch_size=patch_size,
+    num_patches=num_patches,
+    projection_dim=projection_dim,
+    transformer_layers=transformer_layers,
+    num_heads=num_heads,
+    transformer_units=transformer_units,
+    input_shape=input_shape,
+    encoder_name="ViT_encoder_supcon",
+    representation_units=representation_units,
+    load_weights=True,
+    weight_location="saved_models/encoder_weights_ViT_MSE.h5",
+)
 encoder.summary()
+
+# Add projection head
 encoder_with_projection_head = add_projection_head(
     encoder_module=encoder,
     model_name="ViT_encoder_with_projection_head",
@@ -188,9 +187,7 @@ classifier = create_classifier_imgs_only(
 )
 classifier.summary()
 # Logging
-callback_CSVLogger = tf.keras.callbacks.CSVLogger(
-    "CSVLogger/supcon_encoder_ViT.csv"
-)
+callback_CSVLogger = tf.keras.callbacks.CSVLogger("CSVLogger/supcon_encoder_ViT.csv")
 # Train the classifier with the frozen encoder
 history = classifier.fit(
     train_ds,
@@ -200,4 +197,18 @@ history = classifier.fit(
     verbose=2,
 )
 # Save the entire model as a SavedModel.
-classifier.save(f"saved_models/supcon_encoder_ViT")
+classifier.save("saved_models/supcon_encoder_ViT")
+
+# -----------------------------------------------------------------------------------
+# Adding metrics
+# -----------------------------------------------------------------------------------
+
+# Add metrics to csv file
+add_metrics(
+    hist_filelocation="CSVLogger/supcon_encoder_ViT.csv",
+    saved_name="CSVLogger/supcon_encoder_ViT_added_metrics.csv",
+)
+add_metrics(
+    hist_filelocation="CSVLogger/train_baseline_ViT.csv",
+    saved_name="CSVLogger/train_baseline_ViT_added_metrics.csv",
+)
