@@ -1,7 +1,7 @@
 """Pre-text training task, image de-noising, for supervised contrastive learning. Dataset used is different to training dataset."""
 import matplotlib.pyplot as plt
-import tensorflow as tf
 import numpy as np
+import tensorflow as tf
 
 from functions import lr_scheduler
 
@@ -12,7 +12,7 @@ input_shape = (224, 224, 3)
 batch_size = 10  # 32
 lr_start = 0.0005
 
-encoder_type = "ResNet50V2" # "InceptionV3" # "ResNet50V2"
+encoder_type = "ResNet50V2"  # "InceptionV3" # "ResNet50V2"
 input_layer = tf.keras.layers.Input(shape=input_shape)
 if encoder_type == "ResNet50V2":
     print(f"\n{encoder_type}\n")
@@ -83,8 +83,10 @@ else:
 
     # Output layer for deconvolution
     x = tf.keras.layers.Conv2DTranspose(3, (3, 3), strides=(2, 2), padding="same")(x)
-    decoder_output = tf.image.resize(x, (224, 224), method = "bicubic")
-    decoder_output = tf.clip_by_value(decoder_output, clip_value_min=0.0, clip_value_max=1.0)
+    decoder_output = tf.image.resize(x, (224, 224), method="bicubic")
+    decoder_output = tf.clip_by_value(
+        decoder_output, clip_value_min=0.0, clip_value_max=1.0
+    )
     decoder_model = tf.keras.Model(inputs=decoder_input, outputs=decoder_output)
     print("\nDecoder summary")
     decoder_model.summary()
@@ -97,7 +99,7 @@ else:
     encoder_out = encoder_model(add_noise)
     decoder_out = decoder_model(encoder_out)
     autoencoder_model = tf.keras.Model(inputs=ae_inputs, outputs=decoder_out)
-    
+
     # Print the summary of the autoencoder model
     print("\nAutoencoder summary")
     autoencoder_model.summary()
@@ -108,8 +110,7 @@ else:
 # D:\Downloads\ddidiversedermatologyimages
 folder_imgs = "D:/Downloads/pretext_task/"
 image_data_generator = tf.keras.preprocessing.image.ImageDataGenerator(
-    validation_split=0.2, rescale=1.0 / 255, horizontal_flip=True,
-    vertical_flip=True
+    validation_split=0.2, rescale=1.0 / 255, horizontal_flip=True, vertical_flip=True
 )
 image_generator = image_data_generator.flow_from_directory(
     folder_imgs,
@@ -176,12 +177,20 @@ for metric in ["loss", "binary_crossentropy", "root_mean_squared_error"]:
 
 # Visually assess the model
 root_path = "D:/Downloads/pretext_task/ddidiversedermatologyimages/"
-img_paths = [root_path + "000383.png", root_path + "000581.png", root_path + "000573.png", root_path + "000206.png", root_path + "000028.png"]
+img_paths = [
+    root_path + "000383.png",
+    root_path + "000581.png",
+    root_path + "000573.png",
+    root_path + "000206.png",
+    root_path + "000028.png",
+]
 print(img_paths)
 
 images = []
 for path in img_paths:
-    image = tf.keras.utils.load_img(path, target_size=(224, 224))  # Set the desired target size
+    image = tf.keras.utils.load_img(
+        path, target_size=(224, 224)
+    )  # Set the desired target size
     image_array = tf.keras.utils.img_to_array(image)
     images.append(image_array)
 
@@ -194,18 +203,18 @@ denoised_imgs = autoencoder_model.predict(images)
 
 # Visualize the denoised images alongside the original noisy images
 num_images = len(img_paths)
-fig, axes = plt.subplots(nrows=num_images, ncols=2, figsize=(8, 2*num_images))
+fig, axes = plt.subplots(nrows=num_images, ncols=2, figsize=(8, 2 * num_images))
 
 for i in range(num_images):
     # Display original noisy image
     axes[i, 0].imshow(images[i])
-    axes[i, 0].set_title('Noisy Image')
-    axes[i, 0].axis('off')
+    axes[i, 0].set_title("Noisy Image")
+    axes[i, 0].axis("off")
 
     # Display denoised image
     axes[i, 1].imshow(denoised_imgs[i])
-    axes[i, 1].set_title('Denoised Image')
-    axes[i, 1].axis('off')
+    axes[i, 1].set_title("Denoised Image")
+    axes[i, 1].axis("off")
 
 plt.tight_layout()
 plt.show()

@@ -190,8 +190,8 @@ add_metrics(
     saved_name="CSVLogger/supcon_encoder_ResNet50V2_added_metrics.csv",
 )
 add_metrics(
-    hist_filelocation="CSVLogger/supcon_encoder_InceptionV3.csv",
-    saved_name="CSVLogger/supcon_encoder_InceptionV3_added_metrics.csv",
+    hist_filelocation="CSVLogger/train_baseline_ResNet50V2.csv",
+    saved_name="CSVLogger/train_baseline_ResNet50V2_added_metrics.csv",
 )
 add_metrics(
     hist_filelocation="CSVLogger/train_baseline_InceptionV3.csv",
