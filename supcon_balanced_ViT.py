@@ -1,4 +1,5 @@
 """Supervised contrastive learning using two CNN encoder types image data, with balanced batching."""
+import csv
 import tensorflow as tf
 from kerasgen.balanced_image_dataset import balanced_image_dataset_from_directory
 
@@ -17,7 +18,8 @@ from functions import (
 image_width = 224
 
 # Images
-trainDataDir = "D:/Downloads/siim-isic-melanoma-classification/jpeg_adj_sample/train/"
+trainDataDir = "D:/Downloads/siim-isic-melanoma-classification/jpeg_adj_final/train/"
+testDataDir = "D:/Downloads/siim-isic-melanoma-classification/jpeg_adj_final/test/"
 # trainDataDir = "D:/Downloads/siim-isic-melanoma-classification/jpeg_adj_final/train/"
 
 # Create balanced traing and validation datasets
@@ -25,7 +27,7 @@ trainDataDir = "D:/Downloads/siim-isic-melanoma-classification/jpeg_adj_sample/t
 train_ds = balanced_image_dataset_from_directory(
     trainDataDir,
     num_classes_per_batch=2,
-    num_images_per_class=4,
+    num_images_per_class=8,
     image_size=(image_width, image_width),
     validation_split=0.2,
     subset="training",
@@ -36,12 +38,25 @@ train_ds = balanced_image_dataset_from_directory(
 val_ds = balanced_image_dataset_from_directory(
     trainDataDir,
     num_classes_per_batch=2,
-    num_images_per_class=4,
+    num_images_per_class=8,
     image_size=(image_width, image_width),
     validation_split=0.2,
     subset="validation",
     seed=980801,
     safe_triplet=True,
+)
+
+# Create an ImageDataGenerator for testing data
+# We don't need balanced test sets
+test_datagen = tf.keras.preprocessing.image.ImageDataGenerator()
+
+# Create a test generator using the test directory
+test_ds = test_datagen.flow_from_directory(
+    testDataDir,
+    target_size=(image_width, image_width), 
+    batch_size=16,
+    class_mode='binary',     # Binary classification problem
+    shuffle=False            # Disable shuffling to maintain order for evaluation
 )
 
 # ------------------------------------------------------
@@ -83,7 +98,7 @@ callback_EarlyStopping = tf.keras.callbacks.EarlyStopping(
 )
 
 # Image augmentation
-data_aug = create_data_augmentation_module()
+data_aug = create_data_augmentation_module(RandomRotationAmount=0.5)
 
 # ---------------------------------------------------------------------------------
 # Baseline classification models using images only
@@ -127,8 +142,22 @@ history = classifier.fit(
     callbacks=[callback_EarlyStopping, callback_CSVLogger],
     verbose=2,
 )
+
 # Save the entire model as a SavedModel.
-classifier.save("saved_models/train_baseline_ViT")
+# classifier.save("saved_models/train_baseline_ViT")
+
+# Evaluate
+print("Evaluate on test data")
+results = classifier.evaluate(test_ds, verbose=2)
+
+# Write evaluation results to CSV file
+csv_file = "CSVLogger/test_baseline_ViT.csv"
+with open(csv_file, mode='w', newline='') as file:
+    writer = csv.writer(file)
+    # Write column names
+    writer.writerow(classifier.metrics_names)  
+    # Write evaluation results
+    writer.writerow(results) 
 
 # -----------------------------------------------------------------------------------
 # Supervised contrastive learning model with images only
@@ -196,8 +225,22 @@ history = classifier.fit(
     callbacks=[callback_EarlyStopping, callback_CSVLogger],
     verbose=2,
 )
+
 # Save the entire model as a SavedModel.
-classifier.save("saved_models/supcon_encoder_ViT")
+# classifier.save("saved_models/supcon_encoder_ViT")
+
+# Evaluate
+print("Evaluate on test data")
+results = classifier.evaluate(test_ds, verbose=2)
+
+# Write evaluation results to CSV file
+csv_file = "CSVLogger/test_supcon_ViT.csv"
+with open(csv_file, mode='w', newline='') as file:
+    writer = csv.writer(file)
+    # Write column names
+    writer.writerow(classifier.metrics_names)  
+    # Write evaluation results
+    writer.writerow(results) 
 
 # -----------------------------------------------------------------------------------
 # Adding metrics
@@ -211,4 +254,12 @@ add_metrics(
 add_metrics(
     hist_filelocation="CSVLogger/train_baseline_ViT.csv",
     saved_name="CSVLogger/train_baseline_ViT_added_metrics.csv",
+)
+add_metrics(
+    hist_filelocation="CSVLogger/test_supcon_ViT.csv",
+    saved_name="CSVLogger/test_supcon_ViT_added_metrics.csv",
+)
+add_metrics(
+    hist_filelocation="CSVLogger/test_baseline_ViT.csv",
+    saved_name="CSVLogger/test_baseline_ViT_added_metrics.csv",
 )

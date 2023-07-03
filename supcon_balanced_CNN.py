@@ -1,4 +1,5 @@
 """Supervised contrastive learning using two CNN encoder types image data, with balanced batching."""
+import csv
 import tensorflow as tf
 from kerasgen.balanced_image_dataset import balanced_image_dataset_from_directory
 
@@ -17,7 +18,8 @@ from functions import (
 image_width = 224
 
 # Images
-trainDataDir = "D:/Downloads/siim-isic-melanoma-classification/jpeg_adj_sample/train/"
+trainDataDir = "D:/Downloads/siim-isic-melanoma-classification/jpeg_adj_final/train/"
+testDataDir = "D:/Downloads/siim-isic-melanoma-classification/jpeg_adj_final/test/"
 # trainDataDir = "D:/Downloads/siim-isic-melanoma-classification/jpeg_adj_final/train/"
 
 # Create balanced traing and validation datasets
@@ -25,7 +27,7 @@ trainDataDir = "D:/Downloads/siim-isic-melanoma-classification/jpeg_adj_sample/t
 train_ds = balanced_image_dataset_from_directory(
     trainDataDir,
     num_classes_per_batch=2,
-    num_images_per_class=4,
+    num_images_per_class=8,
     image_size=(image_width, image_width),
     validation_split=0.2,
     subset="training",
@@ -36,12 +38,25 @@ train_ds = balanced_image_dataset_from_directory(
 val_ds = balanced_image_dataset_from_directory(
     trainDataDir,
     num_classes_per_batch=2,
-    num_images_per_class=4,
+    num_images_per_class=8,
     image_size=(image_width, image_width),
     validation_split=0.2,
     subset="validation",
     seed=980801,
     safe_triplet=True,
+)
+
+# Create an ImageDataGenerator for testing data
+# We don't need balanced test sets
+test_datagen = tf.keras.preprocessing.image.ImageDataGenerator()
+
+# Create a test generator using the test directory
+test_ds = test_datagen.flow_from_directory(
+    testDataDir,
+    target_size=(image_width, image_width), 
+    batch_size=16,
+    class_mode='binary',     # Binary classification problem
+    shuffle=False            # Disable shuffling to maintain order for evaluation
 )
 
 # ------------------------------------------------------
@@ -108,6 +123,19 @@ for enc in encoder_types:
     )
     # Save the entire model as a SavedModel.
     classifier.save(f"saved_models/train_baseline_{enc}")
+    
+    # Evaluate
+    print("Evaluate on test data")
+    results = classifier.evaluate(test_ds, verbose=2)
+    
+    # Write evaluation results to CSV file
+    csv_file = f"CSVLogger/test_baseline_{enc}.csv"
+    with open(csv_file, mode='w', newline='') as file:
+        writer = csv.writer(file)
+        # Write column names
+        writer.writerow(classifier.metrics_names)  
+        # Write evaluation results
+        writer.writerow(results)  
 
 
 # -----------------------------------------------------------------------------------
@@ -139,7 +167,7 @@ for enc in encoder_types:
     encoder_with_projection_head.summary()
     # Logging
     callback_CSVLogger = tf.keras.callbacks.CSVLogger(
-        f"CSVLogger/supcon_pretrained_encoder_{enc}.csv"
+        f"CSVLogger/supcon_pretraining_{enc}.csv"
     )
     # Pre-training encoder
     history = encoder_with_projection_head.fit(
@@ -162,7 +190,7 @@ for enc in encoder_types:
     classifier.summary()
     # Logging
     callback_CSVLogger = tf.keras.callbacks.CSVLogger(
-        f"CSVLogger/supcon_encoder_{enc}.csv"
+        f"CSVLogger/supcon_{enc}.csv"
     )
     # Train the classifier with the frozen encoder
     history = classifier.fit(
@@ -173,7 +201,21 @@ for enc in encoder_types:
         verbose=2,
     )
     # Save the entire model as a SavedModel.
-    classifier.save(f"saved_models/supcon_encoder_{enc}")
+    # classifier.save(f"saved_models/supcon_{enc}")
+    
+    # Testing
+    # Evaluate
+    print("Evaluate on test data")
+    results = classifier.evaluate(test_ds, verbose=2)
+    
+    # Write evaluation results to CSV file
+    csv_file = f"CSVLogger/test_supcon_{enc}.csv"
+    with open(csv_file, mode='w', newline='') as file:
+        writer = csv.writer(file)
+        # Write column names
+        writer.writerow(classifier.metrics_names)  
+        # Write evaluation results
+        writer.writerow(results) 
 
 
 # -----------------------------------------------------------------------------------
@@ -181,13 +223,14 @@ for enc in encoder_types:
 # -----------------------------------------------------------------------------------
 
 # Add metrics to csv file
+# Training
 add_metrics(
-    hist_filelocation="CSVLogger/supcon_encoder_InceptionV3.csv",
-    saved_name="CSVLogger/supcon_encoder_InceptionV3_added_metrics.csv",
+    hist_filelocation="CSVLogger/supcon_InceptionV3.csv",
+    saved_name="CSVLogger/supcon_InceptionV3_added_metrics.csv",
 )
 add_metrics(
-    hist_filelocation="CSVLogger/supcon_encoder_ResNet50V2.csv",
-    saved_name="CSVLogger/supcon_encoder_ResNet50V2_added_metrics.csv",
+    hist_filelocation="CSVLogger/supcon_ResNet50V2.csv",
+    saved_name="CSVLogger/supcon_ResNet50V2_added_metrics.csv",
 )
 add_metrics(
     hist_filelocation="CSVLogger/train_baseline_ResNet50V2.csv",
@@ -196,6 +239,23 @@ add_metrics(
 add_metrics(
     hist_filelocation="CSVLogger/train_baseline_InceptionV3.csv",
     saved_name="CSVLogger/train_baseline_InceptionV3_added_metrics.csv",
+)
+# Testing
+add_metrics(
+    hist_filelocation="CSVLogger/test_supcon_InceptionV3.csv",
+    saved_name="CSVLogger/test_supcon_InceptionV3_added_metrics.csv",
+)
+add_metrics(
+    hist_filelocation="CSVLogger/test_baseline_InceptionV3.csv",
+    saved_name="CSVLogger/test_baseline_InceptionV3_added_metrics.csv",
+)
+add_metrics(
+    hist_filelocation="CSVLogger/test_supcon_ResNet50V2.csv",
+    saved_name="CSVLogger/test_supcon_ResNet50V2_added_metrics.csv",
+)
+add_metrics(
+    hist_filelocation="CSVLogger/test_baseline_ResNet50V2.csv",
+    saved_name="CSVLogger/test_baseline_ResNet50V2_added_metrics.csv",
 )
 
 # -----------------------------------------------------------------------------------

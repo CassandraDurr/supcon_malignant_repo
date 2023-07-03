@@ -169,7 +169,8 @@ def create_vit_encoder(
 ) -> tf.keras.Model:
     # Create model with the chosen encoder
     input_module = tf.keras.Input(shape=input_shape)
-    augmentation_module = data_augmentation(input_module)
+    rescale = tf.keras.layers.Rescaling(scale=1./255, offset=0.0)(input_module)
+    augmentation_module = data_augmentation(rescale)
     # Create encoder
     vit_encoder = create_vit_encoder_module(
         patch_size=patch_size,
@@ -332,7 +333,8 @@ def create_encoder(
         )
     # Create model with the chosen encoder
     input_module = tf.keras.Input(shape=input_shape)
-    augmentation_module = data_augmentation(input_module)
+    rescale = tf.keras.layers.Rescaling(scale=1./255, offset=0.0)(input_module)
+    augmentation_module = data_augmentation(rescale)
     output_module = encoder_module(augmentation_module)
     output_module = tf.keras.layers.GlobalAveragePooling2D()(output_module)
     model = tf.keras.Model(
@@ -355,13 +357,11 @@ def create_data_augmentation_module(
     """
     data_augmentation = tf.keras.Sequential(
         [
-            tf.keras.layers.Normalization(),
+            # tf.keras.layers.Normalization(),
             tf.keras.layers.GaussianNoise(stddev=0.1),
             tf.keras.layers.RandomFlip("horizontal"),
             tf.keras.layers.RandomFlip("vertical"),
             tf.keras.layers.RandomRotation(RandomRotationAmount)
-            # AttributeError: module 'tensorflow.keras.layers' has no attribute 'RandomBrightness'
-            # tf.keras.layers.RandomBrightness(RandomBrightnessAmount),
         ]
     )
     return data_augmentation
