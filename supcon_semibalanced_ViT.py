@@ -1,9 +1,10 @@
 """Supervised contrastive learning using two CNN encoder types image data, with balanced batching."""
 import csv
+import os
 import tensorflow as tf
 
 from functions import (
-    load_generators,
+    custom_data_generator,
     find_optimal_threshold,
     SupervisedContrastiveLoss,
     add_metrics,
@@ -15,20 +16,41 @@ from functions import (
 
 # Weights should be loaded from pretext task.
 
-# Image width
+# Image width, batch size
 image_width = 224
+batch_size = 48 
 
 # Data directories
 trainDataDir = "local_directory/train/"
 validDataDir = "local_directory/valid/"
 testDataDir = "local_directory/test/"
 
-train_ds, val_ds, valid_ds_unbalanced, test_ds = load_generators(
-    trainDataDir=trainDataDir,
-    validDataDir=validDataDir,
-    testDataDir=testDataDir,
-    image_width=image_width,
-    num_images_per_class = 24
+# Create balanced training and validation datasets
+train_generator = custom_data_generator(data_dir=trainDataDir, batch_size = batch_size, class_0_ratio=0.8, image_width=image_width)
+validation_generator = custom_data_generator(data_dir=validDataDir, batch_size = batch_size, class_0_ratio=0.8, image_width=image_width)
+
+# Calculate the number of steps per epoch and validation steps
+train_steps_per_epoch = len(os.listdir(os.path.join(trainDataDir, '0'))) + len(os.listdir(os.path.join(trainDataDir, '1')))
+val_steps = len(os.listdir(os.path.join(validDataDir, '0'))) + len(os.listdir(os.path.join(validDataDir, '1')))
+
+# Unbalanced test and validation datasets
+# Create an ImageDataGenerator for testing data (don't need balanced test sets)
+test_datagen = tf.keras.preprocessing.image.ImageDataGenerator()
+test_ds = test_datagen.flow_from_directory(
+    testDataDir,
+    target_size=(image_width, image_width), 
+    batch_size=batch_size,
+    class_mode='binary',     
+    shuffle=False            
+)
+# To select the optimal threshold we will also create a data generator 
+valid_datagen_unbalanced = tf.keras.preprocessing.image.ImageDataGenerator()
+valid_ds_unbalanced = valid_datagen_unbalanced.flow_from_directory(
+    validDataDir,
+    target_size=(image_width, image_width), 
+    batch_size=batch_size,
+    class_mode='binary',     
+    shuffle=False            
 )
 
 # ------------------------------------------------------
@@ -108,9 +130,11 @@ callback_CSVLogger = tf.keras.callbacks.CSVLogger(
 )
 # Training
 history = classifier.fit(
-    train_ds,
+    train_generator,
+    steps_per_epoch=train_steps_per_epoch // batch_size,
     epochs=numEpochs,
-    validation_data=val_ds,
+    validation_data=validation_generator,
+    validation_steps=val_steps // batch_size,
     callbacks=[callback_EarlyStopping, callback_CSVLogger],
     verbose=2,
 )
@@ -188,9 +212,11 @@ callback_CSVLogger = tf.keras.callbacks.CSVLogger(
 )
 # Pre-training encoder
 history = encoder_with_projection_head.fit(
-    train_ds,
+    train_generator,
+    steps_per_epoch=train_steps_per_epoch // batch_size,
     epochs=numEpochs,
-    validation_data=val_ds,
+    validation_data=validation_generator,
+    validation_steps=val_steps // batch_size,
     callbacks=[callback_EarlyStopping, callback_CSVLogger],
     verbose=2,
 )
@@ -211,9 +237,11 @@ callback_CSVLogger = tf.keras.callbacks.CSVLogger(
 )
 # Train the classifier with the frozen encoder
 history = classifier.fit(
-    train_ds,
+    train_generator,
+    steps_per_epoch=train_steps_per_epoch // batch_size,
     epochs=numEpochs,
-    validation_data=val_ds,
+    validation_data=validation_generator,
+    validation_steps=val_steps // batch_size,
     callbacks=[callback_EarlyStopping, callback_CSVLogger],
     verbose=2,
 )

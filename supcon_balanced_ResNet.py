@@ -1,62 +1,32 @@
 """Supervised contrastive learning using two CNN encoder types image data, with balanced batching."""
 import csv
 import tensorflow as tf
-from kerasgen.balanced_image_dataset import balanced_image_dataset_from_directory
 
 from functions import (
+    load_generators,
     SupervisedContrastiveLoss,
     add_metrics,
     add_projection_head,
     create_classifier_imgs_only,
     create_data_augmentation_module,
     create_encoder,
+    find_optimal_threshold,
 )
-
-# Weights should be loaded from pretext task.
 
 # Image width
 image_width = 224
 
-# Images
-trainDataDir = "D:/Downloads/siim-isic-melanoma-classification/jpeg_adj_final/train/"
-testDataDir = "D:/Downloads/siim-isic-melanoma-classification/jpeg_adj_final/test/"
-# trainDataDir = "D:/Downloads/siim-isic-melanoma-classification/jpeg_adj_final/train/"
+# Data directories
+trainDataDir = "local_directory/train/"
+validDataDir = "local_directory/valid/"
+testDataDir = "local_directory/test/"
 
-# Create balanced traing and validation datasets
-# batch_size = int(num_classes_per_batch * num_images_per_class)
-train_ds = balanced_image_dataset_from_directory(
-    trainDataDir,
-    num_classes_per_batch=2,
-    num_images_per_class=8,
-    image_size=(image_width, image_width),
-    validation_split=0.2,
-    subset="training",
-    seed=980801,
-    safe_triplet=True,
-)
-
-val_ds = balanced_image_dataset_from_directory(
-    trainDataDir,
-    num_classes_per_batch=2,
-    num_images_per_class=8,
-    image_size=(image_width, image_width),
-    validation_split=0.2,
-    subset="validation",
-    seed=980801,
-    safe_triplet=True,
-)
-
-# Create an ImageDataGenerator for testing data
-# We don't need balanced test sets
-test_datagen = tf.keras.preprocessing.image.ImageDataGenerator()
-
-# Create a test generator using the test directory
-test_ds = test_datagen.flow_from_directory(
-    testDataDir,
-    target_size=(image_width, image_width), 
-    batch_size=16,
-    class_mode='binary',     # Binary classification problem
-    shuffle=False            # Disable shuffling to maintain order for evaluation
+train_ds, val_ds, valid_ds_unbalanced, test_ds = load_generators(
+    trainDataDir=trainDataDir,
+    validDataDir=validDataDir,
+    testDataDir=testDataDir,
+    image_width=image_width,
+    num_images_per_class=24,
 )
 
 # ------------------------------------------------------
@@ -70,7 +40,7 @@ hiddenUnits = 512
 projectionUnits = 128
 numEpochs = 100
 dropoutRate = 0.1
-temperature = 0.05
+temperature = 0.1
 optimiser = tf.keras.optimizers.Adam(learning_rate=learningRate)
 
 # Shared functions
@@ -85,7 +55,8 @@ data_aug = create_data_augmentation_module()
 # ---------------------------------------------------------------------------------
 # Baseline classification models using images only
 # ---------------------------------------------------------------------------------
-encoder_types = ["ResNet50V2", "InceptionV3"]
+encoder_types = ["ResNet50V2"]
+# encoder_types = ["ResNet50V2", "InceptionV3"]
 for enc in encoder_types:
     print(f"\nBaseline classification model using {enc}, only images\n")
     # Setup encoder
@@ -94,7 +65,7 @@ for enc in encoder_types:
         input_shape=input_shape,
         data_augmentation=data_aug,
         encoder_name=f"{enc}_encoder",
-        encoder_weights_location=f"saved_models/encoder_weights_{enc}_MSE.h5",
+        encoder_weights_location=f"supcon_malignant_repo/saved_models/encoder_weights_{enc}_MSE.h5",
     )
     encoder.summary()
     # Setup classifier
@@ -111,7 +82,7 @@ for enc in encoder_types:
     # Define all the callbacks
     # Logging
     callback_CSVLogger = tf.keras.callbacks.CSVLogger(
-        f"CSVLogger/train_baseline_{enc}.csv"
+        f"supcon_malignant_repo/CSVLogger/train_baseline_{enc}.csv"
     )
     # Training
     history = classifier.fit(
@@ -122,21 +93,40 @@ for enc in encoder_types:
         verbose=2,
     )
     # Save the entire model as a SavedModel.
-    classifier.save(f"saved_models/train_baseline_{enc}")
-    
+    # classifier.save(f"supcon_malignant_repo/saved_models/train_baseline_{enc}")
+
     # Evaluate
     print("Evaluate on test data")
-    results = classifier.evaluate(test_ds, verbose=2)
-    
-    # Write evaluation results to CSV file
-    csv_file = f"CSVLogger/test_baseline_{enc}.csv"
-    with open(csv_file, mode='w', newline='') as file:
-        writer = csv.writer(file)
-        # Write column names
-        writer.writerow(classifier.metrics_names)  
-        # Write evaluation results
-        writer.writerow(results)  
+    test_predictions, optimal_threshold, test_metrics = find_optimal_threshold(
+        classifier=classifier, valid_dataset=valid_ds_unbalanced, test_dataset=test_ds
+    )
 
+    # Write evaluation results to CSV file
+    csv_file = f"supcon_malignant_repo/CSVLogger/test_baseline_{enc}.csv"
+    with open(csv_file, mode="w", newline="") as file:
+        fieldnames = [
+            "Threshold",
+            "AUC",
+            "Accuracy",
+            "Precision",
+            "Recall",
+            "Specificity",
+            "F1",
+        ]
+        writer = csv.DictWriter(file, fieldnames=fieldnames)
+
+        writer.writeheader()
+        writer.writerow(
+            {
+                "Threshold": optimal_threshold,
+                "AUC": test_metrics["auc"],
+                "Accuracy": test_metrics["accuracy"],
+                "Precision": test_metrics["precision"],
+                "Recall": test_metrics["recall"],
+                "Specificity": test_metrics["specificity"],
+                "F1": test_metrics["f1"],
+            }
+        )
 
 # -----------------------------------------------------------------------------------
 # Supervised contrastive learning model with images only
@@ -151,7 +141,7 @@ for enc in encoder_types:
         input_shape=input_shape,
         data_augmentation=data_aug,
         encoder_name=f"{enc}_encoder_supcon",
-        encoder_weights_location=f"saved_models/encoder_weights_{enc}_MSE.h5",
+        encoder_weights_location=f"supcon_malignant_repo/saved_models/encoder_weights_{enc}_MSE.h5",
     )
     encoder.summary()
     encoder_with_projection_head = add_projection_head(
@@ -167,7 +157,7 @@ for enc in encoder_types:
     encoder_with_projection_head.summary()
     # Logging
     callback_CSVLogger = tf.keras.callbacks.CSVLogger(
-        f"CSVLogger/supcon_pretraining_{enc}.csv"
+        f"supcon_malignant_repo/CSVLogger/supcon_pretraining_{enc}.csv"
     )
     # Pre-training encoder
     history = encoder_with_projection_head.fit(
@@ -190,7 +180,7 @@ for enc in encoder_types:
     classifier.summary()
     # Logging
     callback_CSVLogger = tf.keras.callbacks.CSVLogger(
-        f"CSVLogger/supcon_{enc}.csv"
+        f"supcon_malignant_repo/CSVLogger/supcon_{enc}.csv"
     )
     # Train the classifier with the frozen encoder
     history = classifier.fit(
@@ -202,20 +192,39 @@ for enc in encoder_types:
     )
     # Save the entire model as a SavedModel.
     # classifier.save(f"saved_models/supcon_{enc}")
-    
-    # Testing
+
     # Evaluate
     print("Evaluate on test data")
-    results = classifier.evaluate(test_ds, verbose=2)
-    
+    test_predictions, optimal_threshold, test_metrics = find_optimal_threshold(
+        classifier=classifier, valid_dataset=valid_ds_unbalanced, test_dataset=test_ds
+    )
+
     # Write evaluation results to CSV file
-    csv_file = f"CSVLogger/test_supcon_{enc}.csv"
-    with open(csv_file, mode='w', newline='') as file:
-        writer = csv.writer(file)
-        # Write column names
-        writer.writerow(classifier.metrics_names)  
-        # Write evaluation results
-        writer.writerow(results) 
+    csv_file = f"supcon_malignant_repo/CSVLogger/test_supcon_{enc}.csv"
+    with open(csv_file, mode="w", newline="") as file:
+        fieldnames = [
+            "Threshold",
+            "AUC",
+            "Accuracy",
+            "Precision",
+            "Recall",
+            "Specificity",
+            "F1",
+        ]
+        writer = csv.DictWriter(file, fieldnames=fieldnames)
+
+        writer.writeheader()
+        writer.writerow(
+            {
+                "Threshold": optimal_threshold,
+                "AUC": test_metrics["auc"],
+                "Accuracy": test_metrics["accuracy"],
+                "Precision": test_metrics["precision"],
+                "Recall": test_metrics["recall"],
+                "Specificity": test_metrics["specificity"],
+                "F1": test_metrics["f1"],
+            }
+        )
 
 
 # -----------------------------------------------------------------------------------
@@ -225,37 +234,12 @@ for enc in encoder_types:
 # Add metrics to csv file
 # Training
 add_metrics(
-    hist_filelocation="CSVLogger/supcon_InceptionV3.csv",
-    saved_name="CSVLogger/supcon_InceptionV3_added_metrics.csv",
+    hist_filelocation="supcon_malignant_repo/CSVLogger/supcon_ResNet50V2.csv",
+    saved_name="supcon_malignant_repo/CSVLogger/supcon_ResNet50V2_added_metrics.csv",
 )
 add_metrics(
-    hist_filelocation="CSVLogger/supcon_ResNet50V2.csv",
-    saved_name="CSVLogger/supcon_ResNet50V2_added_metrics.csv",
-)
-add_metrics(
-    hist_filelocation="CSVLogger/train_baseline_ResNet50V2.csv",
-    saved_name="CSVLogger/train_baseline_ResNet50V2_added_metrics.csv",
-)
-add_metrics(
-    hist_filelocation="CSVLogger/train_baseline_InceptionV3.csv",
-    saved_name="CSVLogger/train_baseline_InceptionV3_added_metrics.csv",
-)
-# Testing
-add_metrics(
-    hist_filelocation="CSVLogger/test_supcon_InceptionV3.csv",
-    saved_name="CSVLogger/test_supcon_InceptionV3_added_metrics.csv",
-)
-add_metrics(
-    hist_filelocation="CSVLogger/test_baseline_InceptionV3.csv",
-    saved_name="CSVLogger/test_baseline_InceptionV3_added_metrics.csv",
-)
-add_metrics(
-    hist_filelocation="CSVLogger/test_supcon_ResNet50V2.csv",
-    saved_name="CSVLogger/test_supcon_ResNet50V2_added_metrics.csv",
-)
-add_metrics(
-    hist_filelocation="CSVLogger/test_baseline_ResNet50V2.csv",
-    saved_name="CSVLogger/test_baseline_ResNet50V2_added_metrics.csv",
+    hist_filelocation="supcon_malignant_repo/CSVLogger/train_baseline_ResNet50V2.csv",
+    saved_name="supcon_malignant_repo/CSVLogger/train_baseline_ResNet50V2_added_metrics.csv",
 )
 
 # -----------------------------------------------------------------------------------

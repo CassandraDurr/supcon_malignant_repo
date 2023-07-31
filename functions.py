@@ -1,10 +1,20 @@
+import os
 import re
 
 import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
 import tensorflow as tf
+from kerasgen.balanced_image_dataset import balanced_image_dataset_from_directory
 import tensorflow_addons as tfa
+from sklearn.metrics import (
+    roc_curve,
+    roc_auc_score,
+    accuracy_score,
+    precision_score,
+    recall_score,
+    fbeta_score,
+)
 
 print("Num GPUs Available: ", len(tf.config.list_physical_devices("GPU")))
 
@@ -169,7 +179,7 @@ def create_vit_encoder(
 ) -> tf.keras.Model:
     # Create model with the chosen encoder
     input_module = tf.keras.Input(shape=input_shape)
-    rescale = tf.keras.layers.Rescaling(scale=1./255, offset=0.0)(input_module)
+    rescale = tf.keras.layers.Rescaling(scale=1.0 / 255, offset=0.0)(input_module)
     augmentation_module = data_augmentation(rescale)
     # Create encoder
     vit_encoder = create_vit_encoder_module(
@@ -333,7 +343,7 @@ def create_encoder(
         )
     # Create model with the chosen encoder
     input_module = tf.keras.Input(shape=input_shape)
-    rescale = tf.keras.layers.Rescaling(scale=1./255, offset=0.0)(input_module)
+    rescale = tf.keras.layers.Rescaling(scale=1.0 / 255, offset=0.0)(input_module)
     augmentation_module = data_augmentation(rescale)
     output_module = encoder_module(augmentation_module)
     output_module = tf.keras.layers.GlobalAveragePooling2D()(output_module)
@@ -345,12 +355,12 @@ def create_encoder(
 
 # Create data-augmentation module
 def create_data_augmentation_module(
-    RandomRotationAmount: float = 0.02,
+    RandomRotationAmount: float = 0.5,
 ) -> tf.keras.Sequential:
     """This function creates a data augmentation module for TensorFlow models.
 
     Args:
-        RandomRotationAmount (float, optional): Argument for tf.keras.layers.RandomRotation. Defaults to 0.02.
+        RandomRotationAmount (float, optional): Argument for tf.keras.layers.RandomRotation. Defaults to 0.5.
 
     Returns:
         tf.keras.Sequential: Data augmentation module
@@ -361,7 +371,8 @@ def create_data_augmentation_module(
             tf.keras.layers.GaussianNoise(stddev=0.1),
             tf.keras.layers.RandomFlip("horizontal"),
             tf.keras.layers.RandomFlip("vertical"),
-            tf.keras.layers.RandomRotation(RandomRotationAmount)
+            tf.keras.layers.RandomRotation(RandomRotationAmount),
+            tf.keras.layers.RandomZoom(height_factor=(0.0, 0.1)),
         ]
     )
     return data_augmentation
@@ -460,9 +471,9 @@ def create_classifier_imgs_only(
         tf.keras.metrics.FalsePositives(),
         tf.keras.metrics.FalseNegatives(),
     ]
-    # Compile model using BinaryFocalCrossentropy
+    # Compile model using Binary Crossentropy
     model.compile(
-        loss=tf.keras.losses.BinaryFocalCrossentropy(from_logits=False),
+        loss=tf.keras.losses.BinaryCrossentropy(from_logits=False),
         optimizer=optimizer,
         metrics=metrics,
     )
@@ -536,9 +547,9 @@ def create_classifier(
         tf.keras.metrics.FalsePositives(),
         tf.keras.metrics.FalseNegatives(),
     ]
-    # Compile model using BinaryFocalCrossentropy
+    # Compile model using Binary Crossentropy
     model.compile(
-        loss=tf.keras.losses.BinaryFocalCrossentropy(from_logits=False),
+        loss=tf.keras.losses.BinaryCrossentropy(from_logits=False),
         optimizer=optimizer,
         metrics=metrics,
     )
@@ -714,3 +725,128 @@ def lr_scheduler(epoch):
         lr = (lr_max - lr_min) * lr_decay ** (epoch - lr_ramp_ep - lr_sus_ep) + lr_min
 
     return lr
+
+# Load data generators
+def load_generators(trainDataDir:str, validDataDir:str, testDataDir:str, image_width:int, num_images_per_class:int) :
+    
+    # Create balanced traing and validation datasets
+    batch_size = int(2 * num_images_per_class)
+    train_ds = balanced_image_dataset_from_directory(
+        trainDataDir,
+        num_classes_per_batch=2,
+        num_images_per_class=num_images_per_class,
+        image_size=(image_width, image_width),
+        seed=980801,
+        safe_triplet=True,
+    )
+
+    val_ds = balanced_image_dataset_from_directory(
+        validDataDir,
+        num_classes_per_batch=2,
+        num_images_per_class=num_images_per_class,
+        image_size=(image_width, image_width),
+        seed=980801,
+        safe_triplet=True,
+    )
+
+    # Create an ImageDataGenerator for testing data (don't need balanced test sets)
+    test_datagen = tf.keras.preprocessing.image.ImageDataGenerator()
+
+    # Create a test generator using the test directory
+    test_ds = test_datagen.flow_from_directory(
+        testDataDir,
+        target_size=(image_width, image_width), 
+        batch_size=batch_size,
+        class_mode='binary',     
+        shuffle=False            
+    )
+
+    # To select the optimal threshold we will also create a data generator 
+    # for validation that is unbalanced
+    valid_datagen_unbalanced = tf.keras.preprocessing.image.ImageDataGenerator()
+    valid_ds_unbalanced = valid_datagen_unbalanced.flow_from_directory(
+        validDataDir,
+        target_size=(image_width, image_width), 
+        batch_size=batch_size,
+        class_mode='binary',     
+        shuffle=False            
+    )
+
+    return train_ds, val_ds, valid_ds_unbalanced, test_ds
+
+
+# Set threshold for classification based on roc
+def find_optimal_threshold(classifier, valid_dataset, test_dataset):
+    beta_val = 5.0
+
+    # Get predicted probabilities on the validation
+    train_probs = classifier.predict(valid_dataset)
+
+    # Calculate ROC curve on the validation dataset
+    # fpr, tpr, thresholds = roc_curve(valid_dataset.labels, train_probs)
+    # # Find the optimal threshold based on ROC curve
+    # optimal_threshold = thresholds[np.argmax(tpr - fpr)]
+
+    # Choose threshold based on f1 score
+    thresholds = [0.35, 0.4, 0.45, 0.5, 0.55, 0.6, 0.65, 0.7, 0.75, 0.8, 0.85]
+    f1_scores = []
+    for threshold in thresholds:
+        # Classify instances as positive or negative based on the threshold
+        valid_predictions = (train_probs > threshold).astype(int)
+        accuracy = fbeta_score(valid_dataset.labels, valid_predictions, beta=beta_val)
+        f1_scores.append(accuracy)
+
+    # Find the threshold that gives the highest accuracy
+    optimal_threshold = thresholds[np.argmax(f1_scores)]
+
+    # Get predicted probabilities on the test dataset
+    test_probs = classifier.predict(test_dataset)
+
+    # Classify instances as positive or negative based on the optimal threshold
+    test_predictions = (test_probs > optimal_threshold).astype(int)
+
+    # Evaluate the model's performance on the test dataset with the new threshold
+    test_auc_score = roc_auc_score(test_dataset.labels, test_probs)
+    test_accuracy = accuracy_score(test_dataset.labels, test_predictions)
+    test_precision = precision_score(test_dataset.labels, test_predictions)
+    test_recall = recall_score(test_dataset.labels, test_predictions)
+    # Specificity = recall for negative class (label 0)
+    test_specificity = recall_score(test_dataset.labels, test_predictions, pos_label=0)
+    test_f1 = fbeta_score(test_dataset.labels, test_predictions, beta=beta_val)
+    test_metrics = {
+        "auc": test_auc_score,
+        "accuracy": test_accuracy,
+        "precision": test_precision,
+        "recall": test_recall,
+        "specificity": test_specificity,
+        "f1": test_f1,
+    }
+
+    return test_predictions, optimal_threshold, test_metrics
+
+
+# Semi-balanced
+def custom_data_generator(data_dir:str, batch_size:int, class_0_ratio:float=0.8, image_width:int=224):
+    class_0_dir = os.path.join(data_dir, "0")
+    class_1_dir = os.path.join(data_dir, "1")
+    class_0_files = os.listdir(class_0_dir)
+    class_1_files = os.listdir(class_1_dir)
+    
+    while True:
+        batch_class_0 = np.random.choice(class_0_files, size=int(batch_size * class_0_ratio), replace=False)
+        batch_class_1 = np.random.choice(class_1_files, size=int(batch_size * (1 - class_0_ratio)), replace=False)
+        
+        batch_files = np.concatenate([batch_class_0, batch_class_1])
+        np.random.shuffle(batch_files)
+        
+        batch_images = []
+        batch_labels = []
+        for file in batch_files:
+            label = 1-int(file in batch_class_0)  # Assign 0 or 1 based on class folder
+            img = tf.keras.preprocessing.image.load_img(os.path.join(data_dir, str(label), file), target_size=(image_width, image_width))
+            img_array = tf.keras.preprocessing.image.img_to_array(img)
+            img_array = np.expand_dims(img_array, axis=0)
+            batch_images.append(img_array)
+            batch_labels.append(label)
+        
+        yield np.concatenate(batch_images), np.array(batch_labels)
