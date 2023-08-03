@@ -1,4 +1,4 @@
-"""Supervised contrastive learning using two CNN encoder types image data, with balanced batching."""
+"""Supervised contrastive learning using two CNN encoder types image data, with perfectly balanced batching."""
 import csv
 import tensorflow as tf
 
@@ -55,8 +55,7 @@ data_aug = create_data_augmentation_module()
 # ---------------------------------------------------------------------------------
 # Baseline classification models using images only
 # ---------------------------------------------------------------------------------
-encoder_types = ["ResNet50V2"]
-# encoder_types = ["ResNet50V2", "InceptionV3"]
+encoder_types = ["ResNet50V2", "InceptionV3"]
 for enc in encoder_types:
     print(f"\nBaseline classification model using {enc}, only images\n")
     # Setup encoder
@@ -92,8 +91,6 @@ for enc in encoder_types:
         callbacks=[callback_EarlyStopping, callback_CSVLogger],
         verbose=2,
     )
-    # Save the entire model as a SavedModel.
-    # classifier.save(f"supcon_malignant_repo/saved_models/train_baseline_{enc}")
 
     # Evaluate
     print("Evaluate on test data")
@@ -155,6 +152,7 @@ for enc in encoder_types:
         loss=SupervisedContrastiveLoss(temperature),
     )
     encoder_with_projection_head.summary()
+
     # Logging
     callback_CSVLogger = tf.keras.callbacks.CSVLogger(
         f"supcon_malignant_repo/CSVLogger/supcon_pretraining_{enc}.csv"
@@ -178,6 +176,7 @@ for enc in encoder_types:
         trainable=False,
     )
     classifier.summary()
+
     # Logging
     callback_CSVLogger = tf.keras.callbacks.CSVLogger(
         f"supcon_malignant_repo/CSVLogger/supcon_{enc}.csv"
@@ -190,8 +189,6 @@ for enc in encoder_types:
         callbacks=[callback_EarlyStopping, callback_CSVLogger],
         verbose=2,
     )
-    # Save the entire model as a SavedModel.
-    # classifier.save(f"saved_models/supcon_{enc}")
 
     # Evaluate
     print("Evaluate on test data")
@@ -240,6 +237,14 @@ add_metrics(
 add_metrics(
     hist_filelocation="supcon_malignant_repo/CSVLogger/train_baseline_ResNet50V2.csv",
     saved_name="supcon_malignant_repo/CSVLogger/train_baseline_ResNet50V2_added_metrics.csv",
+)
+add_metrics(
+    hist_filelocation="supcon_malignant_repo/CSVLogger/supcon_InceptionV3.csv",
+    saved_name="supcon_malignant_repo/CSVLogger/supcon_InceptionV3_added_metrics.csv",
+)
+add_metrics(
+    hist_filelocation="supcon_malignant_repo/CSVLogger/train_baseline_InceptionV3.csv",
+    saved_name="supcon_malignant_repo/CSVLogger/train_baseline_InceptionV3_added_metrics.csv",
 )
 
 # -----------------------------------------------------------------------------------
