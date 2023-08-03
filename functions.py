@@ -2,7 +2,7 @@ import os
 import re
 
 import numpy as np
-import matplotlib.pylot as plt
+import matplotlib.pyplot as plt
 import pandas as pd
 import plotly.graph_objects as go
 import tensorflow as tf
