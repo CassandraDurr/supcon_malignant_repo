@@ -1,9 +1,18 @@
 """Pre-text training task, image de-noising, for supervised contrastive learning. Dataset used is different to training dataset."""
+import warnings
+
 import matplotlib.pyplot as plt
 import numpy as np
 import tensorflow as tf
 
-from functions import lr_scheduler
+from functions import (
+    lr_scheduler,
+    build_resnet_autoencoder,
+    build_inception_autoencoder,
+    build_vit_autoencoder,
+    create_vit_encoder_module,
+    visualise_pretext,
+)
 
 # Output shape of resnet50v2 = (None, 7, 7, 2048)
 # Output shape of inceptionv3 = (None, 5, 5, 2048)
@@ -19,95 +28,56 @@ if encoder_type == "ResNet50V2":
     encoder_module = tf.keras.applications.ResNet50V2(
         include_top=False, weights=None, input_shape=input_shape
     )
-
-    output_encoder = encoder_module(input_layer)
-
-    encoder_model = tf.keras.Model(inputs=input_layer, outputs=output_encoder)
-    print("Encoder summary")
-    encoder_model.summary()
-    print("\n")
-
-    # Define decoder
-    decoder_input = tf.keras.layers.Input(shape=(7, 7, 2048))
-    # Upsample the features using transpose convolutional layers
-    x = tf.keras.layers.Conv2DTranspose(1024, (3, 3), strides=(2, 2), padding="same")(
-        decoder_input
+    # Build autoencoder
+    autoencoder_model = build_resnet_autoencoder(
+        encoder_module, input_shape, input_layer
     )
-    x = tf.keras.layers.Conv2DTranspose(512, (3, 3), strides=(2, 2), padding="same")(x)
-    x = tf.keras.layers.Conv2DTranspose(256, (3, 3), strides=(2, 2), padding="same")(x)
-    x = tf.keras.layers.Conv2DTranspose(128, (3, 3), strides=(2, 2), padding="same")(x)
-    x = tf.keras.layers.Conv2DTranspose(64, (3, 3), strides=(2, 2), padding="same")(x)
-    decoder_output = tf.keras.layers.Conv2D(
-        3, (3, 3), activation="sigmoid", padding="same"
-    )(x)
-    decoder_model = tf.keras.Model(inputs=decoder_input, outputs=decoder_output)
-    print("\nDecoder summary")
-    decoder_model.summary()
-    print("\n")
 
-    # Build the autoencoder
-    ae_inputs = tf.keras.layers.Input(shape=input_shape)
-    # Noise
-    add_noise = tf.keras.layers.GaussianNoise(stddev=0.1)(ae_inputs)
-    encoder_out = encoder_model(add_noise)
-    decoder_out = decoder_model(encoder_out)
-    autoencoder_model = tf.keras.Model(inputs=ae_inputs, outputs=decoder_out)
 
-    # Print the summary of the autoencoder model
-    print("\nAutoencoder summary")
-    autoencoder_model.summary()
-
-else:
+elif encoder_type == "InceptionV3":
     print(f"\n{encoder_type}\n")
     encoder_module = tf.keras.applications.InceptionV3(
         include_top=False, weights=None, input_shape=input_shape
     )
 
-    output_encoder = encoder_module(input_layer)
-
-    encoder_model = tf.keras.Model(inputs=input_layer, outputs=output_encoder)
-    print("Encoder summary")
-    encoder_model.summary()
-    print("\n")
-
-    # Define decoder
-    decoder_input = tf.keras.layers.Input(shape=(5, 5, 2048))
-    # Upsample the features using transpose convolutional layers
-    x = tf.keras.layers.Conv2DTranspose(1024, (3, 3), strides=(2, 2), padding="same")(
-        decoder_input
+    autoencoder_model = build_inception_autoencoder(
+        encoder_module, input_shape, input_layer
     )
-    x = tf.keras.layers.Conv2DTranspose(512, (3, 3), strides=(2, 2), padding="same")(x)
-    x = tf.keras.layers.Conv2DTranspose(256, (3, 3), strides=(2, 2), padding="same")(x)
-    x = tf.keras.layers.Conv2DTranspose(128, (3, 3), strides=(2, 2), padding="same")(x)
-    x = tf.keras.layers.Conv2DTranspose(64, (3, 3), strides=(2, 2), padding="same")(x)
 
-    # Output layer for deconvolution
-    x = tf.keras.layers.Conv2DTranspose(3, (3, 3), strides=(2, 2), padding="same")(x)
-    decoder_output = tf.image.resize(x, (224, 224), method="bicubic")
-    decoder_output = tf.clip_by_value(
-        decoder_output, clip_value_min=0.0, clip_value_max=1.0
+elif encoder_type == "ViT":
+    # Setup encoder parameters
+    image_size = 224
+    patch_size = 14
+    num_patches = (image_size // patch_size) ** 2
+    projection_dim = 64
+    num_heads = 4
+    transformer_units = [
+        projection_dim * 2,
+        projection_dim,
+    ]
+    transformer_layers = 8
+    representation_units = 2048
+
+    # Build encoder
+    encoder_module = create_vit_encoder_module(
+        patch_size=patch_size,
+        num_patches=num_patches,
+        projection_dim=projection_dim,
+        transformer_layers=transformer_layers,
+        num_heads=num_heads,
+        transformer_units=transformer_units,
+        input_shape=input_shape,
+        encoder_name="ViT_encoder",
+        representation_units=representation_units,
     )
-    decoder_model = tf.keras.Model(inputs=decoder_input, outputs=decoder_output)
-    print("\nDecoder summary")
-    decoder_model.summary()
-    print("\n")
 
-    # Build the autoencoder
-    ae_inputs = tf.keras.layers.Input(shape=input_shape)
-    # Noise
-    add_noise = tf.keras.layers.GaussianNoise(stddev=0.1)(ae_inputs)
-    encoder_out = encoder_model(add_noise)
-    decoder_out = decoder_model(encoder_out)
-    autoencoder_model = tf.keras.Model(inputs=ae_inputs, outputs=decoder_out)
+    autoencoder_model = build_vit_autoencoder(encoder_module, input_shape, input_layer)
 
-    # Print the summary of the autoencoder model
-    print("\nAutoencoder summary")
-    autoencoder_model.summary()
+else:
+    warnings.warn(f"Invalid encoder_type: {encoder_type}. No autoencoder built.")
 
 # Create data generator
-# Dataset = Stanford DDI (Diverse Dermatology Images)
-# https://ddi-dataset.github.io/
-# D:\Downloads\ddidiversedermatologyimages
+# Dataset = Stanford Diverse Dermatology Images
 folder_imgs = "D:/Downloads/pretext_task/"
 image_data_generator = tf.keras.preprocessing.image.ImageDataGenerator(
     validation_split=0.2, rescale=1.0 / 255, horizontal_flip=True, vertical_flip=True
@@ -160,11 +130,8 @@ history = autoencoder_model.fit(
 
 # Try to save the weights from the encoder
 encoder_module.save_weights(f"saved_models/encoder_weights_{encoder_type}_MSE.h5")
-# encoder_model.save_weights(f"saved_models/encoder_weights_{encoder_type}_MSE.h5")
-# encoder_model.load_weights('encoder_weights.h5')
 
 # Plots
-# for metric in ["loss", "mean_squared_error", "root_mean_squared_error"]:
 for metric in ["loss", "binary_crossentropy", "root_mean_squared_error"]:
     plt.figure(figsize=(9, 6))
     plt.plot(history.history[metric], label="Training")
@@ -184,8 +151,8 @@ img_paths = [
     root_path + "000206.png",
     root_path + "000028.png",
 ]
-print(img_paths)
 
+# Load images from image paths
 images = []
 for path in img_paths:
     image = tf.keras.utils.load_img(
@@ -199,22 +166,8 @@ images = np.array(images)
 images /= 255.0
 images = images.reshape(-1, 224, 224, 3)
 
+# Predict
 denoised_imgs = autoencoder_model.predict(images)
 
 # Visualize the denoised images alongside the original noisy images
-num_images = len(img_paths)
-fig, axes = plt.subplots(nrows=num_images, ncols=2, figsize=(8, 2 * num_images))
-
-for i in range(num_images):
-    # Display original noisy image
-    axes[i, 0].imshow(images[i])
-    axes[i, 0].set_title("Noisy Image")
-    axes[i, 0].axis("off")
-
-    # Display denoised image
-    axes[i, 1].imshow(denoised_imgs[i])
-    axes[i, 1].set_title("Denoised Image")
-    axes[i, 1].axis("off")
-
-plt.tight_layout()
-plt.show()
+visualise_pretext(img_paths=img_paths, images=images, denoised_imgs=denoised_imgs)

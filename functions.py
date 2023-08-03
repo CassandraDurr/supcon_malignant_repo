@@ -2,13 +2,13 @@ import os
 import re
 
 import numpy as np
+import matplotlib.pylot as plt
 import pandas as pd
 import plotly.graph_objects as go
 import tensorflow as tf
 from kerasgen.balanced_image_dataset import balanced_image_dataset_from_directory
 import tensorflow_addons as tfa
 from sklearn.metrics import (
-    roc_curve,
     roc_auc_score,
     accuracy_score,
     precision_score,
@@ -726,9 +726,15 @@ def lr_scheduler(epoch):
 
     return lr
 
+
 # Load data generators
-def load_generators(trainDataDir:str, validDataDir:str, testDataDir:str, image_width:int, num_images_per_class:int) :
-    
+def load_generators(
+    trainDataDir: str,
+    validDataDir: str,
+    testDataDir: str,
+    image_width: int,
+    num_images_per_class: int,
+):
     # Create balanced traing and validation datasets
     batch_size = int(2 * num_images_per_class)
     train_ds = balanced_image_dataset_from_directory(
@@ -755,21 +761,21 @@ def load_generators(trainDataDir:str, validDataDir:str, testDataDir:str, image_w
     # Create a test generator using the test directory
     test_ds = test_datagen.flow_from_directory(
         testDataDir,
-        target_size=(image_width, image_width), 
+        target_size=(image_width, image_width),
         batch_size=batch_size,
-        class_mode='binary',     
-        shuffle=False            
+        class_mode="binary",
+        shuffle=False,
     )
 
-    # To select the optimal threshold we will also create a data generator 
+    # To select the optimal threshold we will also create a data generator
     # for validation that is unbalanced
     valid_datagen_unbalanced = tf.keras.preprocessing.image.ImageDataGenerator()
     valid_ds_unbalanced = valid_datagen_unbalanced.flow_from_directory(
         validDataDir,
-        target_size=(image_width, image_width), 
+        target_size=(image_width, image_width),
         batch_size=batch_size,
-        class_mode='binary',     
-        shuffle=False            
+        class_mode="binary",
+        shuffle=False,
     )
 
     return train_ds, val_ds, valid_ds_unbalanced, test_ds
@@ -777,7 +783,7 @@ def load_generators(trainDataDir:str, validDataDir:str, testDataDir:str, image_w
 
 # Set threshold for classification based on roc
 def find_optimal_threshold(classifier, valid_dataset, test_dataset):
-    beta_val = 5.0
+    beta_val = 2.0
 
     # Get predicted probabilities on the validation
     train_probs = classifier.predict(valid_dataset)
@@ -788,7 +794,7 @@ def find_optimal_threshold(classifier, valid_dataset, test_dataset):
     # optimal_threshold = thresholds[np.argmax(tpr - fpr)]
 
     # Choose threshold based on f1 score
-    thresholds = [0.35, 0.4, 0.45, 0.5, 0.55, 0.6, 0.65, 0.7, 0.75, 0.8, 0.85]
+    thresholds = [0.35, 0.4, 0.425, 0.45, 0.475, 0.5, 0.55, 0.6, 0.65, 0.7, 0.75]
     f1_scores = []
     for threshold in thresholds:
         # Classify instances as positive or negative based on the threshold
@@ -826,27 +832,189 @@ def find_optimal_threshold(classifier, valid_dataset, test_dataset):
 
 
 # Semi-balanced
-def custom_data_generator(data_dir:str, batch_size:int, class_0_ratio:float=0.8, image_width:int=224):
+def custom_data_generator(
+    data_dir: str, batch_size: int, class_0_ratio: float = 0.8, image_width: int = 224
+):
     class_0_dir = os.path.join(data_dir, "0")
     class_1_dir = os.path.join(data_dir, "1")
     class_0_files = os.listdir(class_0_dir)
     class_1_files = os.listdir(class_1_dir)
-    
+
     while True:
-        batch_class_0 = np.random.choice(class_0_files, size=int(batch_size * class_0_ratio), replace=False)
-        batch_class_1 = np.random.choice(class_1_files, size=int(batch_size * (1 - class_0_ratio)), replace=False)
-        
+        batch_class_0 = np.random.choice(
+            class_0_files, size=int(batch_size * class_0_ratio), replace=False
+        )
+        batch_class_1 = np.random.choice(
+            class_1_files, size=int(batch_size * (1 - class_0_ratio)), replace=False
+        )
+
         batch_files = np.concatenate([batch_class_0, batch_class_1])
         np.random.shuffle(batch_files)
-        
+
         batch_images = []
         batch_labels = []
         for file in batch_files:
-            label = 1-int(file in batch_class_0)  # Assign 0 or 1 based on class folder
-            img = tf.keras.preprocessing.image.load_img(os.path.join(data_dir, str(label), file), target_size=(image_width, image_width))
+            label = 1 - int(
+                file in batch_class_0
+            )  # Assign 0 or 1 based on class folder
+            img = tf.keras.preprocessing.image.load_img(
+                os.path.join(data_dir, str(label), file),
+                target_size=(image_width, image_width),
+            )
             img_array = tf.keras.preprocessing.image.img_to_array(img)
             img_array = np.expand_dims(img_array, axis=0)
             batch_images.append(img_array)
             batch_labels.append(label)
-        
+
         yield np.concatenate(batch_images), np.array(batch_labels)
+
+
+# Build ResNet autoencoder
+def build_resnet_autoencoder(
+    encoder_module: tf.keras.Model, input_shape: tuple[int], input_layer: tf.keras.layers.Input
+) -> tf.keras.Model:
+    
+    # The output of the encoder
+    output_encoder = encoder_module(input_layer)
+
+    encoder_model = tf.keras.Model(inputs=input_layer, outputs=output_encoder)
+    print("Encoder summary")
+    encoder_model.summary()
+    print("\n")
+
+    # Define decoder
+    decoder_input = tf.keras.layers.Input(shape=(7, 7, 2048))
+    # Upsample the features using transpose convolutional layers
+    x = tf.keras.layers.Conv2DTranspose(1024, (3, 3), strides=(2, 2), padding="same")(
+        decoder_input
+    )
+    x = tf.keras.layers.Conv2DTranspose(512, (3, 3), strides=(2, 2), padding="same")(x)
+    x = tf.keras.layers.Conv2DTranspose(256, (3, 3), strides=(2, 2), padding="same")(x)
+    x = tf.keras.layers.Conv2DTranspose(128, (3, 3), strides=(2, 2), padding="same")(x)
+    x = tf.keras.layers.Conv2DTranspose(64, (3, 3), strides=(2, 2), padding="same")(x)
+    decoder_output = tf.keras.layers.Conv2D(
+        3, (3, 3), activation="sigmoid", padding="same"
+    )(x)
+    decoder_model = tf.keras.Model(inputs=decoder_input, outputs=decoder_output)
+    print("\nDecoder summary")
+    decoder_model.summary()
+    print("\n")
+
+    # Build the autoencoder
+    ae_inputs = tf.keras.layers.Input(shape=input_shape)
+    # Noise
+    add_noise = tf.keras.layers.GaussianNoise(stddev=0.1)(ae_inputs)
+    encoder_out = encoder_model(add_noise)
+    decoder_out = decoder_model(encoder_out)
+    autoencoder_model = tf.keras.Model(inputs=ae_inputs, outputs=decoder_out)
+
+    # Print the summary of the autoencoder model
+    print("\nAutoencoder summary")
+    autoencoder_model.summary()
+
+    return autoencoder_model
+
+
+# # Build InceptionV3 pretext autoencoder
+def build_inception_autoencoder(
+    encoder_module: tf.keras.Model, input_shape: tuple[int], input_layer: tf.keras.layers.Input
+) -> tf.keras.Model:
+    
+    # Output of encoder
+    output_encoder = encoder_module(input_layer)
+
+    encoder_model = tf.keras.Model(inputs=input_layer, outputs=output_encoder)
+    print("Encoder summary")
+    encoder_model.summary()
+    print("\n")
+
+    # Define decoder
+    decoder_input = tf.keras.layers.Input(shape=(5, 5, 2048))
+    # Upsample the features using transpose convolutional layers
+    x = tf.keras.layers.Conv2DTranspose(1024, (3, 3), strides=(2, 2), padding="same")(
+        decoder_input
+    )
+    x = tf.keras.layers.Conv2DTranspose(512, (3, 3), strides=(2, 2), padding="same")(x)
+    x = tf.keras.layers.Conv2DTranspose(256, (3, 3), strides=(2, 2), padding="same")(x)
+    x = tf.keras.layers.Conv2DTranspose(128, (3, 3), strides=(2, 2), padding="same")(x)
+    x = tf.keras.layers.Conv2DTranspose(64, (3, 3), strides=(2, 2), padding="same")(x)
+
+    # Output layer for deconvolution
+    x = tf.keras.layers.Conv2DTranspose(3, (3, 3), strides=(2, 2), padding="same")(x)
+    decoder_output = tf.image.resize(x, (224, 224), method="bicubic")
+    decoder_output = tf.clip_by_value(
+        decoder_output, clip_value_min=0.0, clip_value_max=1.0
+    )
+    decoder_model = tf.keras.Model(inputs=decoder_input, outputs=decoder_output)
+    print("\nDecoder summary")
+    decoder_model.summary()
+    print("\n")
+
+    # Build the autoencoder
+    ae_inputs = tf.keras.layers.Input(shape=input_shape)
+    # Noise
+    add_noise = tf.keras.layers.GaussianNoise(stddev=0.1)(ae_inputs)
+    encoder_out = encoder_model(add_noise)
+    decoder_out = decoder_model(encoder_out)
+    autoencoder_model = tf.keras.Model(inputs=ae_inputs, outputs=decoder_out)
+
+    # Print the summary of the autoencoder model
+    print("\nAutoencoder summary")
+    autoencoder_model.summary()
+
+    return autoencoder_model
+
+
+# Build ViT pretext denoising autoencoder
+def build_vit_autoencoder(
+    encoder_module: tf.keras.Model, input_shape: tuple[int], input_layer: tf.keras.layers.Input
+) -> tf.keras.Model:
+    
+    output_encoder = encoder_module(input_layer)
+
+    encoder_model = tf.keras.Model(inputs=input_layer, outputs=output_encoder)
+    print("Encoder summary")
+    encoder_model.summary()
+    print("\n")
+
+    # Define decoder
+    decoder_model = create_decoder()
+    print("\nDecoder summary")
+    decoder_model.summary()
+    print("\n")
+
+    # Build the autoencoder
+    ae_inputs = tf.keras.layers.Input(shape=input_shape)
+    # Noise
+    add_noise = tf.keras.layers.GaussianNoise(stddev=0.1)(ae_inputs)
+    encoder_out = encoder_model(add_noise)
+    decoder_out = decoder_model(encoder_out)
+    autoencoder_model = tf.keras.Model(inputs=ae_inputs, outputs=decoder_out)
+
+    # Print the summary of the autoencoder model
+    print("\nAutoencoder summary")
+    autoencoder_model.summary()
+
+    return autoencoder_model
+
+
+# Visualise pretext-training images
+def visualise_pretext(
+    img_paths: list[str], images: list[np.ndarray], denoised_imgs: np.ndarray
+) -> None:
+    num_images = len(img_paths)
+    fig, axes = plt.subplots(nrows=num_images, ncols=2, figsize=(8, 2 * num_images))
+
+    for i in range(num_images):
+        # Display original noisy image
+        axes[i, 0].imshow(images[i])
+        axes[i, 0].set_title("Noisy Image")
+        axes[i, 0].axis("off")
+
+        # Display denoised image
+        axes[i, 1].imshow(denoised_imgs[i])
+        axes[i, 1].set_title("Denoised Image")
+        axes[i, 1].axis("off")
+
+    plt.tight_layout()
+    plt.show()
