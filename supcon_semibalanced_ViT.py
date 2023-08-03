@@ -26,8 +26,8 @@ validDataDir = "local_directory/valid/"
 testDataDir = "local_directory/test/"
 
 # Create balanced training and validation datasets
-train_generator = custom_data_generator(data_dir=trainDataDir, batch_size = batch_size, class_0_ratio=0.8, image_width=image_width)
-validation_generator = custom_data_generator(data_dir=validDataDir, batch_size = batch_size, class_0_ratio=0.8, image_width=image_width)
+train_generator = custom_data_generator(data_dir=trainDataDir, batch_size = batch_size, class_0_ratio=0.75, image_width=image_width)
+validation_generator = custom_data_generator(data_dir=validDataDir, batch_size = batch_size, class_0_ratio=0.75, image_width=image_width)
 
 # Calculate the number of steps per epoch and validation steps
 train_steps_per_epoch = len(os.listdir(os.path.join(trainDataDir, '0'))) + len(os.listdir(os.path.join(trainDataDir, '1')))
