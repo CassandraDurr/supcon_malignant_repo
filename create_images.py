@@ -1,18 +1,14 @@
 from functions import save_figure
 
-# dfs = [
-#     "train_baseline_InceptionV3_added_metrics",
-#     "train_baseline_ResNet50V2_added_metrics",
-#     "supcon_encoder_InceptionV3_added_metrics",
-#     "supcon_encoder_ResNet50V2_added_metrics",
-# ]
-
 dfs = [
-    "train_baseline_InceptionV3_added_metrics_incl_tabular",
-    "train_baseline_ResNet50V2_added_metrics_incl_tabular",
-    "supcon_encoder_InceptionV3_added_metrics_incl_tabular",
-    "supcon_encoder_ResNet50V2_added_metrics_incl_tabular",
+    "train_baseline_InceptionV3_added_metrics",
+    "train_baseline_ResNet50V2_added_metrics",
+    "train_baseline_ViT_added_metrics",
+    "supcon_encoder_InceptionV3_added_metrics",
+    "supcon_encoder_ResNet50V2_added_metrics",
+    "supcon_encoder_ViT_added_metrics",
 ]
+
 
 for df in dfs:
     # Loss and accuracy
