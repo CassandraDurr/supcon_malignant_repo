@@ -16,7 +16,7 @@ from functions import (
 
 # Image width, batch size
 image_width = 224
-batch_size = 48 
+batch_size = 48
 
 # Data directories
 trainDataDir = "local_directory/train/"
@@ -24,31 +24,45 @@ validDataDir = "local_directory/valid/"
 testDataDir = "local_directory/test/"
 
 # Create balanced training and validation datasets
-train_generator = custom_data_generator(data_dir=trainDataDir, batch_size = batch_size, class_0_ratio=0.75, image_width=image_width)
-validation_generator = custom_data_generator(data_dir=validDataDir, batch_size = batch_size, class_0_ratio=0.75, image_width=image_width)
+train_generator = custom_data_generator(
+    data_dir=trainDataDir,
+    batch_size=batch_size,
+    class_0_ratio=0.75,
+    image_width=image_width,
+)
+validation_generator = custom_data_generator(
+    data_dir=validDataDir,
+    batch_size=batch_size,
+    class_0_ratio=0.75,
+    image_width=image_width,
+)
 
 # Calculate the number of steps per epoch and validation steps
-train_steps_per_epoch = len(os.listdir(os.path.join(trainDataDir, "0"))) + len(os.listdir(os.path.join(trainDataDir, "1")))
-val_steps = len(os.listdir(os.path.join(validDataDir, "0"))) + len(os.listdir(os.path.join(validDataDir, "1")))
+train_steps_per_epoch = len(os.listdir(os.path.join(trainDataDir, "0"))) + len(
+    os.listdir(os.path.join(trainDataDir, "1"))
+)
+val_steps = len(os.listdir(os.path.join(validDataDir, "0"))) + len(
+    os.listdir(os.path.join(validDataDir, "1"))
+)
 
 # Unbalanced test and validation datasets
 # Create an ImageDataGenerator for testing data (don't need balanced test sets)
 test_datagen = tf.keras.preprocessing.image.ImageDataGenerator()
 test_ds = test_datagen.flow_from_directory(
     testDataDir,
-    target_size=(image_width, image_width), 
+    target_size=(image_width, image_width),
     batch_size=batch_size,
-    class_mode="binary",     
-    shuffle=False            
+    class_mode="binary",
+    shuffle=False,
 )
-# To select the optimal threshold we will also create a data generator 
+# To select the optimal threshold we will also create a data generator
 valid_datagen_unbalanced = tf.keras.preprocessing.image.ImageDataGenerator()
 valid_ds_unbalanced = valid_datagen_unbalanced.flow_from_directory(
     validDataDir,
-    target_size=(image_width, image_width), 
+    target_size=(image_width, image_width),
     batch_size=batch_size,
-    class_mode="binary",     
-    shuffle=False            
+    class_mode="binary",
+    shuffle=False,
 )
 
 # ------------------------------------------------------

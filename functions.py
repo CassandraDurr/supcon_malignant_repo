@@ -871,9 +871,10 @@ def custom_data_generator(
 
 # Build ResNet autoencoder
 def build_resnet_autoencoder(
-    encoder_module: tf.keras.Model, input_shape: tuple[int], input_layer: tf.keras.layers.Input
+    encoder_module: tf.keras.Model,
+    input_shape: tuple[int],
+    input_layer: tf.keras.layers.Input,
 ) -> tf.keras.Model:
-    
     # The output of the encoder
     output_encoder = encoder_module(input_layer)
 
@@ -917,9 +918,10 @@ def build_resnet_autoencoder(
 
 # # Build InceptionV3 pretext autoencoder
 def build_inception_autoencoder(
-    encoder_module: tf.keras.Model, input_shape: tuple[int], input_layer: tf.keras.layers.Input
+    encoder_module: tf.keras.Model,
+    input_shape: tuple[int],
+    input_layer: tf.keras.layers.Input,
 ) -> tf.keras.Model:
-    
     # Output of encoder
     output_encoder = encoder_module(input_layer)
 
@@ -967,9 +969,10 @@ def build_inception_autoencoder(
 
 # Build ViT pretext denoising autoencoder
 def build_vit_autoencoder(
-    encoder_module: tf.keras.Model, input_shape: tuple[int], input_layer: tf.keras.layers.Input
+    encoder_module: tf.keras.Model,
+    input_shape: tuple[int],
+    input_layer: tf.keras.layers.Input,
 ) -> tf.keras.Model:
-    
     output_encoder = encoder_module(input_layer)
 
     encoder_model = tf.keras.Model(inputs=input_layer, outputs=output_encoder)

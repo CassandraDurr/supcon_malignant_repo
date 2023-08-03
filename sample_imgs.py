@@ -1,7 +1,9 @@
 import os
 import random
 
-train_data_dir = 'D:/Downloads/siim-isic-melanoma-classification/jpeg_adj_sample/train/1/' 
+train_data_dir = (
+    "D:/Downloads/siim-isic-melanoma-classification/jpeg_adj_sample/train/1/"
+)
 
 # Get file count
 _, _, files = next(os.walk(train_data_dir))
@@ -13,9 +15,9 @@ print(file_count)
 
 # Number of images in the directory
 files = os.listdir(train_data_dir)
-for file in random.sample(files,384):
-    os.remove(train_data_dir+file)
-    
+for file in random.sample(files, 384):
+    os.remove(train_data_dir + file)
+
 # Get file count
 _, _, files = next(os.walk(train_data_dir))
 file_count = len(files)

@@ -18,7 +18,7 @@ from functions import (
 
 # Image width, batch size
 image_width = 224
-batch_size = 48 
+batch_size = 48
 
 # Data directories
 trainDataDir = "local_directory/train/"
@@ -26,31 +26,45 @@ validDataDir = "local_directory/valid/"
 testDataDir = "local_directory/test/"
 
 # Create balanced training and validation datasets
-train_generator = custom_data_generator(data_dir=trainDataDir, batch_size = batch_size, class_0_ratio=0.75, image_width=image_width)
-validation_generator = custom_data_generator(data_dir=validDataDir, batch_size = batch_size, class_0_ratio=0.75, image_width=image_width)
+train_generator = custom_data_generator(
+    data_dir=trainDataDir,
+    batch_size=batch_size,
+    class_0_ratio=0.75,
+    image_width=image_width,
+)
+validation_generator = custom_data_generator(
+    data_dir=validDataDir,
+    batch_size=batch_size,
+    class_0_ratio=0.75,
+    image_width=image_width,
+)
 
 # Calculate the number of steps per epoch and validation steps
-train_steps_per_epoch = len(os.listdir(os.path.join(trainDataDir, '0'))) + len(os.listdir(os.path.join(trainDataDir, '1')))
-val_steps = len(os.listdir(os.path.join(validDataDir, '0'))) + len(os.listdir(os.path.join(validDataDir, '1')))
+train_steps_per_epoch = len(os.listdir(os.path.join(trainDataDir, "0"))) + len(
+    os.listdir(os.path.join(trainDataDir, "1"))
+)
+val_steps = len(os.listdir(os.path.join(validDataDir, "0"))) + len(
+    os.listdir(os.path.join(validDataDir, "1"))
+)
 
 # Unbalanced test and validation datasets
 # Create an ImageDataGenerator for testing data (don't need balanced test sets)
 test_datagen = tf.keras.preprocessing.image.ImageDataGenerator()
 test_ds = test_datagen.flow_from_directory(
     testDataDir,
-    target_size=(image_width, image_width), 
+    target_size=(image_width, image_width),
     batch_size=batch_size,
-    class_mode='binary',     
-    shuffle=False            
+    class_mode="binary",
+    shuffle=False,
 )
-# To select the optimal threshold we will also create a data generator 
+# To select the optimal threshold we will also create a data generator
 valid_datagen_unbalanced = tf.keras.preprocessing.image.ImageDataGenerator()
 valid_ds_unbalanced = valid_datagen_unbalanced.flow_from_directory(
     validDataDir,
-    target_size=(image_width, image_width), 
+    target_size=(image_width, image_width),
     batch_size=batch_size,
-    class_mode='binary',     
-    shuffle=False            
+    class_mode="binary",
+    shuffle=False,
 )
 
 # ------------------------------------------------------
@@ -139,39 +153,36 @@ history = classifier.fit(
     verbose=2,
 )
 
-# Save the entire model as a SavedModel.
-# classifier.save("saved_models/train_baseline_ViT")
-
 # Evaluate
 print("Evaluate on test data")
 csv_file = "supcon_malignant_repo/CSVLogger/test_baseline_ViT.csv"
 test_predictions, optimal_threshold, test_metrics = find_optimal_threshold(
-        classifier=classifier, valid_dataset=valid_ds_unbalanced, test_dataset=test_ds
-    )
+    classifier=classifier, valid_dataset=valid_ds_unbalanced, test_dataset=test_ds
+)
 with open(csv_file, mode="w", newline="") as file:
-        fieldnames = [
-            "Threshold",
-            "AUC",
-            "Accuracy",
-            "Precision",
-            "Recall",
-            "Specificity",
-            "F1",
-        ]
-        writer = csv.DictWriter(file, fieldnames=fieldnames)
+    fieldnames = [
+        "Threshold",
+        "AUC",
+        "Accuracy",
+        "Precision",
+        "Recall",
+        "Specificity",
+        "F1",
+    ]
+    writer = csv.DictWriter(file, fieldnames=fieldnames)
 
-        writer.writeheader()
-        writer.writerow(
-            {
-                "Threshold": optimal_threshold,
-                "AUC": test_metrics["auc"],
-                "Accuracy": test_metrics["accuracy"],
-                "Precision": test_metrics["precision"],
-                "Recall": test_metrics["recall"],
-                "Specificity": test_metrics["specificity"],
-                "F1": test_metrics["f1"],
-            }
-        )
+    writer.writeheader()
+    writer.writerow(
+        {
+            "Threshold": optimal_threshold,
+            "AUC": test_metrics["auc"],
+            "Accuracy": test_metrics["accuracy"],
+            "Precision": test_metrics["precision"],
+            "Recall": test_metrics["recall"],
+            "Specificity": test_metrics["specificity"],
+            "F1": test_metrics["f1"],
+        }
+    )
 
 # -----------------------------------------------------------------------------------
 # Supervised contrastive learning model with images only
@@ -252,33 +263,33 @@ history = classifier.fit(
 # Evaluate
 print("Evaluate on test data")
 test_predictions, optimal_threshold, test_metrics = find_optimal_threshold(
-        classifier=classifier, valid_dataset=valid_ds_unbalanced, test_dataset=test_ds
-    )
+    classifier=classifier, valid_dataset=valid_ds_unbalanced, test_dataset=test_ds
+)
 csv_file = "supcon_malignant_repo/CSVLogger/test_supcon_ViT.csv"
 with open(csv_file, mode="w", newline="") as file:
-        fieldnames = [
-            "Threshold",
-            "AUC",
-            "Accuracy",
-            "Precision",
-            "Recall",
-            "Specificity",
-            "F1",
-        ]
-        writer = csv.DictWriter(file, fieldnames=fieldnames)
+    fieldnames = [
+        "Threshold",
+        "AUC",
+        "Accuracy",
+        "Precision",
+        "Recall",
+        "Specificity",
+        "F1",
+    ]
+    writer = csv.DictWriter(file, fieldnames=fieldnames)
 
-        writer.writeheader()
-        writer.writerow(
-            {
-                "Threshold": optimal_threshold,
-                "AUC": test_metrics["auc"],
-                "Accuracy": test_metrics["accuracy"],
-                "Precision": test_metrics["precision"],
-                "Recall": test_metrics["recall"],
-                "Specificity": test_metrics["specificity"],
-                "F1": test_metrics["f1"],
-            }
-        )
+    writer.writeheader()
+    writer.writerow(
+        {
+            "Threshold": optimal_threshold,
+            "AUC": test_metrics["auc"],
+            "Accuracy": test_metrics["accuracy"],
+            "Precision": test_metrics["precision"],
+            "Recall": test_metrics["recall"],
+            "Specificity": test_metrics["specificity"],
+            "F1": test_metrics["f1"],
+        }
+    )
 
 # -----------------------------------------------------------------------------------
 # Adding metrics
@@ -293,4 +304,3 @@ add_metrics(
     hist_filelocation="supcon_malignant_repo/CSVLogger/train_baseline_ViT.csv",
     saved_name="supcon_malignant_repo/CSVLogger/train_baseline_ViT_added_metrics.csv",
 )
-
