@@ -18,12 +18,12 @@ from functions import (
 
 # Image width, batch size
 image_width = 224
-batch_size = 48
+batch_size = 16
 
 # Data directories
-trainDataDir = "local_directory/train/"
-validDataDir = "local_directory/valid/"
-testDataDir = "local_directory/test/"
+trainDataDir = "D:/HAM10000/train/"
+validDataDir = "D:/HAM10000/valid/"
+testDataDir = "D:/HAM10000/test/"
 
 # Create balanced training and validation datasets
 train_generator = custom_data_generator(
@@ -183,6 +183,17 @@ with open(csv_file, mode="w", newline="") as file:
             "F1": test_metrics["f1"],
         }
     )
+    
+# Evaluate with normal threshold:
+results = classifier.evaluate(test_ds, verbose=2)
+
+# Append results to csv_file
+with open(csv_file, mode="a", newline="") as file:
+    fieldnames = ["Metric", "Value"]
+    writer = csv.DictWriter(file, fieldnames=fieldnames)
+
+    for metric_name, metric_value in zip(classifier.metrics_names, results):
+        writer.writerow({"Metric": metric_name, "Value": metric_value})
 
 # -----------------------------------------------------------------------------------
 # Supervised contrastive learning model with images only
@@ -290,6 +301,17 @@ with open(csv_file, mode="w", newline="") as file:
             "F1": test_metrics["f1"],
         }
     )
+
+# Evaluate with normal threshold:
+results = classifier.evaluate(test_ds, verbose=2)
+
+# Append results to csv_file
+with open(csv_file, mode="a", newline="") as file:
+    fieldnames = ["Metric", "Value"]
+    writer = csv.DictWriter(file, fieldnames=fieldnames)
+
+    for metric_name, metric_value in zip(classifier.metrics_names, results):
+        writer.writerow({"Metric": metric_name, "Value": metric_value})
 
 # -----------------------------------------------------------------------------------
 # Adding metrics

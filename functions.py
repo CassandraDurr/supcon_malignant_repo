@@ -788,13 +788,8 @@ def find_optimal_threshold(classifier, valid_dataset, test_dataset):
     # Get predicted probabilities on the validation
     train_probs = classifier.predict(valid_dataset)
 
-    # Calculate ROC curve on the validation dataset
-    # fpr, tpr, thresholds = roc_curve(valid_dataset.labels, train_probs)
-    # # Find the optimal threshold based on ROC curve
-    # optimal_threshold = thresholds[np.argmax(tpr - fpr)]
-
     # Choose threshold based on f1 score
-    thresholds = [0.35, 0.4, 0.425, 0.45, 0.475, 0.5, 0.55, 0.6, 0.65, 0.7, 0.75]
+    thresholds = np.linspace(start = 0.1, stop = 0.9, num = 100).tolist()
     f1_scores = []
     for threshold in thresholds:
         # Classify instances as positive or negative based on the threshold
