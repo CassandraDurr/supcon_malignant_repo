@@ -156,7 +156,7 @@ history = classifier.fit(
 # Evaluate
 print("Evaluate on test data")
 csv_file = "supcon_malignant_repo/CSVLogger/test_baseline_ViT.csv"
-test_predictions, optimal_threshold, test_metrics = find_optimal_threshold(
+test_predictions, optimal_threshold, test_metrics, valid_metrics = find_optimal_threshold(
     classifier=classifier, valid_dataset=valid_ds_unbalanced, test_dataset=test_ds
 )
 with open(csv_file, mode="w", newline="") as file:
@@ -183,17 +183,32 @@ with open(csv_file, mode="w", newline="") as file:
             "F1": test_metrics["f1"],
         }
     )
-    
-# Evaluate with normal threshold:
-results = classifier.evaluate(test_ds, verbose=2)
 
-# Append results to csv_file
-with open(csv_file, mode="a", newline="") as file:
-    fieldnames = ["Metric", "Value"]
+# Evaluate on validation data
+with open(csv_file.replace("test", "valid"), mode="w", newline="") as file:
+    fieldnames = [
+        "Threshold",
+        "AUC",
+        "Accuracy",
+        "Precision",
+        "Recall",
+        "Specificity",
+        "F1",
+    ]
     writer = csv.DictWriter(file, fieldnames=fieldnames)
 
-    for metric_name, metric_value in zip(classifier.metrics_names, results):
-        writer.writerow({"Metric": metric_name, "Value": metric_value})
+    writer.writeheader()
+    writer.writerow(
+        {
+            "Threshold": optimal_threshold,
+            "AUC": valid_metrics["auc"],
+            "Accuracy": valid_metrics["accuracy"],
+            "Precision": valid_metrics["precision"],
+            "Recall": valid_metrics["recall"],
+            "Specificity": valid_metrics["specificity"],
+            "F1": valid_metrics["f1"],
+        }
+    )
 
 # -----------------------------------------------------------------------------------
 # Supervised contrastive learning model with images only
@@ -268,12 +283,9 @@ history = classifier.fit(
     verbose=2,
 )
 
-# Save the entire model as a SavedModel.
-# classifier.save("saved_models/supcon_encoder_ViT")
-
 # Evaluate
 print("Evaluate on test data")
-test_predictions, optimal_threshold, test_metrics = find_optimal_threshold(
+test_predictions, optimal_threshold, test_metrics, valid_metrics = find_optimal_threshold(
     classifier=classifier, valid_dataset=valid_ds_unbalanced, test_dataset=test_ds
 )
 csv_file = "supcon_malignant_repo/CSVLogger/test_supcon_ViT.csv"
@@ -302,16 +314,32 @@ with open(csv_file, mode="w", newline="") as file:
         }
     )
 
-# Evaluate with normal threshold:
-results = classifier.evaluate(test_ds, verbose=2)
-
-# Append results to csv_file
-with open(csv_file, mode="a", newline="") as file:
-    fieldnames = ["Metric", "Value"]
+# Evaluate on validation data
+with open(csv_file.replace("test", "valid"), mode="w", newline="") as file:
+    fieldnames = [
+        "Threshold",
+        "AUC",
+        "Accuracy",
+        "Precision",
+        "Recall",
+        "Specificity",
+        "F1",
+    ]
     writer = csv.DictWriter(file, fieldnames=fieldnames)
 
-    for metric_name, metric_value in zip(classifier.metrics_names, results):
-        writer.writerow({"Metric": metric_name, "Value": metric_value})
+    writer.writeheader()
+    writer.writerow(
+        {
+            "Threshold": optimal_threshold,
+            "AUC": valid_metrics["auc"],
+            "Accuracy": valid_metrics["accuracy"],
+            "Precision": valid_metrics["precision"],
+            "Recall": valid_metrics["recall"],
+            "Specificity": valid_metrics["specificity"],
+            "F1": valid_metrics["f1"],
+        }
+    )
+
 
 # -----------------------------------------------------------------------------------
 # Adding metrics

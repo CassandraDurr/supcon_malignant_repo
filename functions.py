@@ -822,8 +822,20 @@ def find_optimal_threshold(classifier, valid_dataset, test_dataset):
         "specificity": test_specificity,
         "f1": test_f1,
     }
+    
+    # Validation metrics
+    val_probs = classifier.predict(valid_dataset)
+    val_predictions = (val_probs > optimal_threshold).astype(int)
+    val_metrics = {
+        "auc": roc_auc_score(valid_dataset.labels, val_probs),
+        "accuracy": accuracy_score(valid_dataset.labels, val_predictions),
+        "precision": precision_score(valid_dataset.labels, val_predictions),
+        "recall": recall_score(valid_dataset.labels, val_predictions),
+        "specificity": recall_score(valid_dataset.labels, val_predictions, pos_label=0),
+        "f1": fbeta_score(valid_dataset.labels, val_predictions, beta=beta_val),
+    }
 
-    return test_predictions, optimal_threshold, test_metrics
+    return test_predictions, optimal_threshold, test_metrics, val_metrics
 
 
 # Semi-balanced
